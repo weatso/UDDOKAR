@@ -1,16 +1,36 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Menu, Box } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
   const isPrintPage = pathname?.endsWith('/cetak');
   const isLoginPage = pathname?.startsWith('/login');
+
+  // Fitur Keamanan: Paksa Logout jika browser baru dibuka (tab baru/window baru)
+  // Kecualikan halaman cetak agar tidak logout saat membuka tab print baru
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoginPage && !isPrintPage) {
+      const activeSession = sessionStorage.getItem('active_session');
+      
+      // Jika penanda sesi aktif tidak ada, berarti ini adalah sesi browser baru
+      if (!activeSession) {
+        const forceLogout = async () => {
+          await supabase.auth.signOut();
+          router.push('/login');
+          router.refresh();
+        };
+        forceLogout();
+      }
+    }
+  }, [isLoginPage, isPrintPage, router]);
 
   if (isLoginPage || isPrintPage) {
     return <>{children}</>;

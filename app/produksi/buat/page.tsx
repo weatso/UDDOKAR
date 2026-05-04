@@ -19,7 +19,7 @@ export default function BuatSPKPage() {
   const [formData, setFormData] = useState({
     spk_number: `SPK-${Date.now().toString().slice(-6)}`,
     target_product_id: '',
-    target_quantity: 0,
+    target_quantity: '',
   });
 
   useEffect(() => {
@@ -46,19 +46,24 @@ export default function BuatSPKPage() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('production_orders')
         .insert([{
           spk_number: formData.spk_number,
           target_product_id: formData.target_product_id,
           target_quantity: formData.target_quantity,
           status: 'PENDING'
-        }]);
+        }])
+        .select();
 
       if (error) throw error;
 
       alert('SPK berhasil dibuat!');
-      router.push('/produksi');
+      if (data && data[0]) {
+        router.push(`/produksi/${data[0].id}`);
+      } else {
+        router.push('/produksi');
+      }
       router.refresh();
       
     } catch (error: any) {
@@ -70,77 +75,81 @@ export default function BuatSPKPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-full overflow-hidden">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
-        <div className="flex items-center gap-4">
-          <Link href="/produksi" className="p-2 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-full transition-colors shadow-sm">
-            <ArrowLeft className="w-6 h-6" />
-          </Link>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Buat Surat Perintah Kerja (SPK)</h1>
-            <p className="text-gray-500 mt-1 text-sm md:text-base">Terbitkan instruksi untuk mulai memproduksi kardus baru.</p>
-          </div>
+    <div className="p-4 md:p-8 max-w-3xl mx-auto overflow-hidden">
+      <div className="flex items-center gap-4 mb-8">
+        <Link href="/produksi" className="p-2 bg-gray-200 hover:bg-gray-300 rounded-full text-black border-2 border-gray-400 transition-colors shadow-sm">
+          <ArrowLeft className="w-6 h-6" />
+        </Link>
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold text-black">Buat Surat Perintah Kerja (SPK)</h1>
+          <p className="text-gray-600 mt-1 text-sm md:text-base font-semibold">Terbitkan instruksi produksi kardus baru.</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 md:p-8 space-y-6">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border-2 border-gray-300 shadow-lg overflow-hidden">
+        <div className="p-6 md:p-10 space-y-8">
           
           <div>
-            <label className="block text-base font-bold text-gray-800 mb-2">Nomor SPK Otomatis</label>
+            <label className="block text-base font-bold text-black mb-2">Nomor SPK Otomatis</label>
             <input 
               disabled
               type="text" 
               value={formData.spk_number}
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-100 text-gray-600 font-bold text-base"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl bg-gray-50 text-gray-500 font-black text-lg"
             />
           </div>
 
           <div>
-            <label className="block text-base font-bold text-gray-800 mb-2">Target Kardus (Barang Jadi)</label>
-            <select 
-              required
-              value={formData.target_product_id}
-              onChange={e => setFormData({...formData, target_product_id: e.target.value})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base text-gray-900 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
-            >
-              <option value="">-- Pilih Kardus yang akan diproduksi --</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <label className="block text-base font-bold text-black mb-2">Target Kardus (Barang Jadi)</label>
+            <div className="relative">
+              <select 
+                required
+                value={formData.target_product_id}
+                onChange={e => setFormData({...formData, target_product_id: e.target.value})}
+                className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl text-base font-bold text-black focus:border-purple-600 focus:outline-none bg-white appearance-none transition-all"
+              >
+                <option value="">-- Pilih Kardus --</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700">
+                <svg className="fill-current h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-gray-500 font-semibold italic">* Jika kardus tidak ada, pastikan sudah terdaftar di Master Data Barang Jadi.</p>
           </div>
 
           <div>
-            <label className="block text-base font-bold text-gray-800 mb-2">Target Jumlah Produksi (Pcs)</label>
+            <label className="block text-base font-bold text-black mb-2">Target Jumlah Produksi (Pcs)</label>
             <input 
               required
               type="number" 
               min="1"
-              value={formData.target_quantity || ''}
-              onChange={e => setFormData({...formData, target_quantity: Number(e.target.value)})}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base text-gray-900 font-bold focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="Contoh: 500"
+              value={formData.target_quantity}
+              onChange={e => setFormData({...formData, target_quantity: e.target.value as any})}
+              className="w-full px-4 py-4 border-2 border-gray-300 rounded-xl text-xl font-black text-black focus:border-purple-600 focus:outline-none transition-all"
+              placeholder="0"
             />
           </div>
 
         </div>
 
-        <div className="p-4 md:p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-4">
+        <div className="p-6 border-t-2 border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-end gap-3">
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-6 py-3 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-200 transition-colors bg-white text-base"
+            className="w-full sm:w-auto px-8 py-3 border-2 border-gray-300 text-black font-bold rounded-xl hover:bg-gray-100 transition-all bg-white text-base"
           >
             Batal
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-8 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-70 text-base shadow-sm"
+            className="w-full sm:w-auto px-10 py-4 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 border-2 border-purple-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 text-lg shadow-md"
           >
-            <Save className="w-5 h-5" />
-            {isSubmitting ? 'Menyimpan...' : 'Terbitkan SPK'}
+            <Save className="w-6 h-6" />
+            {isSubmitting ? 'Memproses...' : 'Terbitkan SPK'}
           </button>
         </div>
       </form>

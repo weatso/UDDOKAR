@@ -79,12 +79,18 @@ export default function ProsesSPKPage() {
             <p className="text-black font-bold mt-1 text-sm md:text-lg">SPK: {order.spk_number} | <span className="text-purple-800">{order.target_quantity} Pcs</span> | Produk: {order.product?.name}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <a href={`/produksi/${order.id}/cetak`} target="_blank" rel="noopener noreferrer" className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg border-2 border-black">
-            <Printer className="w-5 h-5" /> Cetak SPK
+        <div className="flex flex-wrap items-center gap-3 md:gap-4 w-full md:w-auto">
+          <a href={`/produksi/${order.id}/cetak`} className="flex-1 md:flex-none bg-black hover:bg-gray-800 text-white px-5 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg border-2 border-black text-sm md:text-base">
+            <Printer className="w-4 h-4 md:w-5 md:h-5" /> Cetak SPK
           </a>
-          <StatusBadge status={order.status} />
-          {!isCompleted && <button onClick={handleCompleteSPK} className="bg-green-600 hover:bg-green-700 text-white border-2 border-green-800 px-6 py-3 rounded-xl text-base font-bold flex items-center gap-2"><CheckCircle className="w-6 h-6" /> Selesaikan SPK</button>}
+          <div className="flex-none">
+            <StatusBadge status={order.status} />
+          </div>
+          {!isCompleted && (
+            <button onClick={handleCompleteSPK} className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white border-2 border-green-800 px-5 py-3 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2">
+              <CheckCircle className="w-5 h-5 md:w-6 md:h-6" /> Selesaikan SPK
+            </button>
+          )}
         </div>
       </div>
 
@@ -95,19 +101,29 @@ export default function ProsesSPKPage() {
             <h2 className="text-2xl font-bold text-black">Bahan Terpakai</h2>
           </div>
           {!isCompleted && (
-            <form onSubmit={handleAddConsumed} className="p-6 border-b-2 border-gray-300 bg-gray-100 flex flex-col md:flex-row gap-4 items-end">
-              <div className="w-full md:flex-1">
-                <label className="block text-base font-bold text-black mb-2">Bahan Mentah</label>
-                <select required value={consumedForm.product_id} onChange={e => setConsumedForm({...consumedForm, product_id: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-400 rounded-lg text-black font-bold focus:border-purple-600 focus:outline-none">
+            <form onSubmit={handleAddConsumed} className="p-4 md:p-6 border-b-2 border-gray-300 bg-gray-100 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+              <div className="md:col-span-4">
+                <label className="block text-sm md:text-base font-bold text-black mb-1 md:mb-2">Bahan Mentah</label>
+                <select required value={consumedForm.product_id} onChange={e => setConsumedForm({...consumedForm, product_id: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-400 rounded-lg text-black font-bold focus:border-purple-600 focus:outline-none text-sm md:text-base">
                   <option value="">-- Pilih --</option>
-                  {rawProducts.map(p => <option key={p.id} value={p.id}>{p.name} (Stok: {p.stock_quantity})</option>)}
+                  {rawProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
-              <div className="w-full md:w-32">
-                <label className="block text-base font-bold text-black mb-2">Qty</label>
-                <input required type="number" min="0.01" step="0.01" value={consumedForm.quantity} onChange={e => setConsumedForm({...consumedForm, quantity: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-400 rounded-lg text-black font-bold focus:border-purple-600 focus:outline-none" />
+              <div className="md:col-span-3">
+                <label className="block text-sm md:text-base font-bold text-black mb-1 md:mb-2">Qty Pakai</label>
+                <input required type="number" min="0.01" step="0.01" value={consumedForm.quantity} onChange={e => setConsumedForm({...consumedForm, quantity: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-400 rounded-lg text-black font-bold focus:border-purple-600 focus:outline-none text-base md:text-lg" />
               </div>
-              <button type="submit" className="w-full md:w-auto bg-black hover:bg-gray-800 text-white border-2 border-black px-5 py-3 rounded-xl font-bold"><Plus className="w-5 h-5 inline" /> Catat</button>
+              <div className="md:col-span-2">
+                <label className="block text-sm md:text-base font-bold text-black mb-1 md:mb-2 text-center">Stok</label>
+                <div className="w-full px-4 py-3 border-2 border-gray-300 bg-gray-200 rounded-lg text-purple-800 font-black text-center text-base md:text-lg">
+                  {rawProducts.find(p => p.id === consumedForm.product_id)?.stock_quantity || 0}
+                </div>
+              </div>
+              <div className="md:col-span-3">
+                <button type="submit" className="w-full bg-black hover:bg-gray-800 text-white border-2 border-black px-4 py-[13.5px] rounded-xl font-bold flex items-center justify-center gap-2 text-base md:text-lg shadow-md transition-all active:scale-95">
+                  <Plus className="w-5 h-5 md:w-6 md:h-6 shrink-0" /> <span className="whitespace-nowrap">Catat</span>
+                </button>
+              </div>
             </form>
           )}
           <div className="overflow-x-auto">

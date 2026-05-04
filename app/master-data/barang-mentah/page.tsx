@@ -3,42 +3,59 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Edit, Trash2, Search, X } from 'lucide-react';
+import { Pagination } from '@/components/shared/Pagination';
+
+const ITEMS_PER_PAGE = 16;
 
 export default function BarangMentahPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ id: '', name: '', category_id: '', new_category_name: '', unit: 'Lembar' });
+  const [formData, setFormData] = useState({ id: '', name: '', category_id: '', new_category_name: '', unit: 'pcs' });
 
-  useEffect(() => { fetchData(); }, []);
+  // Fetch categories once on mount
+  useEffect(() => {
+    const fetchCats = async () => {
+      const { data } = await supabase.from('categories').select('*').eq('is_active', true).order('name', { ascending: true });
+      if (data) setCategories(data);
+    };
+    fetchCats();
+  }, []);
 
-  const fetchData = async () => {
+  // Fetch products when page or search changes
+  useEffect(() => {
+    fetchData(currentPage);
+  }, [currentPage, searchQuery]);
+
+  const fetchData = async (page: number) => {
     setIsLoading(true);
+    const from = page * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
     try {
-      const { data: prodData, error: prodErr } = await supabase
+      let query = supabase
         .from('products')
-        .select('*, category:categories(name)')
+        .select('*, category:categories(name)', { count: 'exact' })
         .eq('type', 'RAW')
         .eq('is_active', true)
         .order('created_at', { ascending: false });
-        
-      if (prodErr) throw new Error('Gagal mengambil data barang: ' + prodErr.message);
 
-      const { data: catData, error: catErr } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
-        
-      if (catErr) throw new Error('Gagal mengambil data kategori: ' + catErr.message);
+      if (searchQuery) {
+        query = query.ilike('name', `%${searchQuery}%`);
+      }
 
-      if (prodData) setProducts(prodData);
-      if (catData) setCategories(catData);
+      const { data, count, error } = await query.range(from, to);
+        
+      if (error) throw error;
+      if (data) setProducts(data);
+      if (count !== null) setTotalItems(count);
     } catch (error: any) {
       console.error("Fetch Data Error:", error);
-      alert(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -51,10 +68,10 @@ export default function BarangMentahPage() {
         name: product.name, 
         category_id: product.category_id || '', 
         new_category_name: '', 
-        unit: product.dimensions?.unit || 'Lembar' 
+        unit: product.dimensions?.unit || 'pcs' 
       });
     } else {
-      setFormData({ id: '', name: '', category_id: '', new_category_name: '', unit: 'Lembar' });
+      setFormData({ id: '', name: '', category_id: '', new_category_name: '', unit: 'pcs' });
     }
     setIsModalOpen(true);
   };
@@ -63,33 +80,15 @@ export default function BarangMentahPage() {
     e.preventDefault();
     try {
       let finalCategoryId = formData.category_id;
-      
-      // Jika user memilih buat kategori baru
       if (formData.category_id === 'NEW') {
         if (!formData.new_category_name.trim()) return alert('Nama kategori baru tidak boleh kosong!');
-        
-        const { data: newCat, error: catError } = await supabase
-          .from('categories')
-          .insert([{ name: formData.new_category_name }])
-          .select()
-          .single();
-          
-        if (catError) throw new Error('Gagal membuat kategori baru: ' + catError.message);
+        const { data: newCat, error: catError } = await supabase.from('categories').insert([{ name: formData.new_category_name }]).select().single();
+        if (catError) throw catError;
         if (newCat) finalCategoryId = newCat.id;
       }
+      if (!finalCategoryId || finalCategoryId === 'NEW') return alert('Kategori harus dipilih!');
 
-      if (!finalCategoryId || finalCategoryId === 'NEW') {
-        return alert('Kategori harus dipilih atau dibuat dengan benar!');
-      }
-
-      // Payload dipastikan sesuai skema
-      const payload = { 
-        name: formData.name, 
-        category_id: finalCategoryId, 
-        type: 'RAW', 
-        dimensions: { unit: formData.unit } 
-      };
-
+      const payload = { name: formData.name, category_id: finalCategoryId, type: 'RAW', dimensions: { unit: formData.unit } };
       let opError;
       if (formData.id) {
         const { error } = await supabase.from('products').update(payload).eq('id', formData.id);
@@ -98,110 +97,149 @@ export default function BarangMentahPage() {
         const { error } = await supabase.from('products').insert([payload]);
         opError = error;
       }
-
-      if (opError) throw new Error('Gagal menyimpan barang mentah: ' + opError.message);
-
+      if (opError) throw opError;
       alert('Data berhasil disimpan!');
       setIsModalOpen(false);
-      fetchData();
-    } catch (error: any) {
-      console.error("Save Product Error:", error);
-      alert(error.message);
-    }
+      fetchData(currentPage);
+    } catch (error: any) { alert(error.message); }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Yakin ingin menghapus barang ini?')) {
-      try {
-        const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id);
-        if (error) throw new Error('Gagal menghapus data: ' + error.message);
-        alert('Data berhasil dihapus');
-        fetchData();
-      } catch (error: any) {
-        console.error("Delete Error:", error);
-        alert(error.message);
-      }
+    if (confirm('Yakin ingin menghapus?')) {
+      await supabase.from('products').update({ is_active: false }).eq('id', id);
+      fetchData(currentPage);
     }
   };
 
   return (
     <div className="p-4 md:p-8 max-w-full overflow-hidden">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-black">Barang Mentah</h1>
-          <p className="text-black font-semibold mt-2 text-base">Kelola daftar bahan baku.</p>
+          <p className="text-black font-semibold mt-1 text-sm md:text-base">Kelola daftar bahan baku.</p>
         </div>
-        <button onClick={() => handleOpenModal()} className="bg-purple-700 hover:bg-purple-800 text-white border-2 border-purple-900 px-5 py-3 rounded-lg text-base font-bold flex items-center gap-2">
-          <Plus className="w-5 h-5" /> Tambah Barang
-        </button>
+        <div className="flex flex-col sm:flex-row w-full lg:w-auto gap-3">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input 
+              type="text"
+              placeholder="Cari nama barang..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(0); }}
+              className="pl-10 pr-4 py-3 w-full border-2 border-gray-300 rounded-xl focus:border-purple-600 focus:outline-none text-black font-bold transition-all shadow-sm"
+            />
+          </div>
+          <button onClick={() => handleOpenModal()} className="bg-purple-700 hover:bg-purple-800 text-white border-2 border-purple-900 px-5 py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all shadow-md">
+            <Plus className="w-5 h-5" /> Tambah Barang
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border-2 border-gray-300 shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* ===== DESKTOP VIEW ===== */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm md:text-base border-collapse whitespace-nowrap">
             <thead className="bg-gray-200 border-b-2 border-gray-400">
-            <tr>
-              <th className="px-6 py-4 text-black font-bold">Nama Barang</th>
-              <th className="px-6 py-4 text-black font-bold">Kategori</th>
-              <th className="px-6 py-4 text-black font-bold text-center">Satuan</th>
-              <th className="px-6 py-4 text-black font-bold text-right">Stok Saat Ini</th>
-              <th className="px-6 py-4 text-black font-bold text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {isLoading ? <tr><td colSpan={5} className="text-center py-8 text-black font-bold">Memuat data...</td></tr> : 
-             products.length === 0 ? <tr><td colSpan={5} className="text-center py-8 text-black font-bold">Belum ada data.</td></tr> : 
-             products.map(p => (
-              <tr key={p.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-black font-bold">{p.name}</td>
-                <td className="px-6 py-4 text-black font-semibold">{p.category?.name || '-'}</td>
-                <td className="px-6 py-4 text-black font-semibold text-center">{p.dimensions?.unit || '-'}</td>
-                <td className="px-6 py-4 text-black font-bold text-right text-lg">{p.stock_quantity}</td>
-                <td className="px-6 py-4 flex justify-center gap-3">
-                  <button onClick={() => handleOpenModal(p)} className="p-2 text-white bg-purple-600 hover:bg-purple-700 rounded-md border border-purple-800"><Edit className="w-5 h-5" /></button>
-                  <button onClick={() => handleDelete(p.id)} className="p-2 text-white bg-red-600 hover:bg-red-700 rounded-md border border-red-800"><Trash2 className="w-5 h-5" /></button>
-                </td>
+              <tr>
+                <th className="px-6 py-4 text-black font-bold">Nama Barang</th>
+                <th className="px-6 py-4 text-black font-bold">Kategori</th>
+                <th className="px-6 py-4 text-black font-bold text-center">Satuan</th>
+                <th className="px-6 py-4 text-black font-bold text-right">Stok Saat Ini</th>
+                <th className="px-6 py-4 text-black font-bold text-center">Aksi</th>
               </tr>
-            ))}
-          </tbody>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {isLoading ? <tr><td colSpan={5} className="text-center py-8 text-black font-bold">Memuat data...</td></tr> :
+               products.length === 0 ? <tr><td colSpan={5} className="text-center py-8 text-black font-bold">Barang tidak ditemukan.</td></tr> :
+               products.map(p => (
+                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 text-black font-bold">{p.name}</td>
+                  <td className="px-6 py-4 text-black font-semibold">{p.category?.name || '-'}</td>
+                  <td className="px-6 py-4 text-black font-semibold text-center">{p.dimensions?.unit || '-'}</td>
+                  <td className="px-6 py-4 text-black font-bold text-right text-lg">{p.stock_quantity}</td>
+                  <td className="px-6 py-4 flex justify-center gap-3">
+                    <button onClick={() => handleOpenModal(p)} className="p-2 text-white bg-purple-600 hover:bg-purple-700 rounded-md border border-purple-800 transition-all"><Edit className="w-5 h-5" /></button>
+                    <button onClick={() => handleDelete(p.id)} className="p-2 text-white bg-red-600 hover:bg-red-700 rounded-md border border-red-800 transition-all"><Trash2 className="w-5 h-5" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
           </table>
+        </div>
+
+        {/* ===== MOBILE CARD VIEW ===== */}
+        <div className="md:hidden p-3 bg-gray-50 min-h-[200px]">
+          {isLoading ? (
+            <div className="text-center py-8 text-black font-bold">Memuat data...</div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-8 text-black font-bold bg-white rounded-xl border-2 border-dashed border-gray-300">Barang tidak ditemukan.</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {products.map(p => (
+                <div key={p.id} className="bg-white p-4 rounded-xl border-2 border-gray-200 shadow-sm flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-lg font-bold text-black leading-tight">{p.name}</p>
+                    <span className="shrink-0 bg-purple-100 text-purple-800 border border-purple-300 text-xs font-bold px-2.5 py-1 rounded-full">{p.category?.name || 'Tanpa Kategori'}</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5 text-sm border-t border-gray-100 pt-3">
+                    <div className="flex justify-between items-center"><span className="text-gray-500 font-semibold">Satuan</span><span className="text-black font-bold">{p.dimensions?.unit || '-'}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-gray-500 font-semibold">Stok Saat Ini</span><span className={`text-base font-black ${p.stock_quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>{p.stock_quantity ?? 0}</span></div>
+                  </div>
+                  <div className="flex gap-2 border-t border-gray-100 pt-3">
+                    <button onClick={() => handleOpenModal(p)} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm rounded-lg border border-purple-800 transition-all"><Edit className="w-4 h-4" /> Edit</button>
+                    <button onClick={() => handleDelete(p.id)} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-lg border border-red-800 transition-all"><Trash2 className="w-4 h-4" /> Hapus</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
+      <Pagination 
+        currentPage={currentPage}
+        totalItems={totalItems}
+        itemsPerPage={ITEMS_PER_PAGE}
+        onPageChange={setCurrentPage}
+      />
+
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl border-2 border-gray-400 w-full max-w-md">
-            <div className="flex justify-between items-center p-5 border-b-2 border-gray-200 bg-gray-100">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border-2 border-gray-300 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center p-5 border-b-2 border-gray-100 bg-gray-50/50">
               <h2 className="font-bold text-xl text-black">{formData.id ? 'Edit Barang' : 'Tambah Barang'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-black hover:text-gray-600"><X className="w-6 h-6" /></button>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-black transition-colors"><X className="w-6 h-6" /></button>
             </div>
-            <form onSubmit={handleSave} className="p-6 space-y-5">
-              <div>
-                <label className="block text-base font-bold text-black mb-2">Nama Barang</label>
-                <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-black font-semibold focus:border-purple-600 focus:outline-none" />
+            <form onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
+              <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-5">
+                <div>
+                  <label className="block text-base font-bold text-black mb-2">Nama Barang</label>
+                  <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl text-black font-semibold focus:border-purple-600 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-base font-bold text-black mb-2">Kategori</label>
+                  <select value={formData.category_id} onChange={e => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl text-black font-semibold focus:border-purple-600 transition-all mb-2">
+                    <option value="">Pilih Kategori...</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="NEW">+ Buat Kategori Baru</option>
+                  </select>
+                  {formData.category_id === 'NEW' && <input required type="text" value={formData.new_category_name} onChange={e => setFormData({...formData, new_category_name: e.target.value})} className="w-full px-4 py-3 border-2 border-purple-600 rounded-xl text-black font-semibold bg-purple-50 focus:outline-none transition-all" placeholder="Ketik nama kategori baru" />}
+                </div>
+                <div>
+                  <label className="block text-base font-bold text-black mb-2">Satuan</label>
+                  <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl text-black font-semibold focus:border-purple-600 transition-all">
+                    <option value="pack">pack</option>
+                    <option value="kg">kg</option>
+                    <option value="lembar">lembar</option>
+                    <option value="liter">liter</option>
+                    <option value="roll">roll</option>
+                    <option value="pcs">pcs</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-base font-bold text-black mb-2">Kategori</label>
-                <select value={formData.category_id} onChange={e => setFormData({...formData, category_id: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-black font-semibold focus:border-purple-600 focus:outline-none mb-3">
-                  <option value="">Pilih Kategori...</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  <option value="NEW">+ Buat Kategori Baru</option>
-                </select>
-                {formData.category_id === 'NEW' && <input required type="text" value={formData.new_category_name} onChange={e => setFormData({...formData, new_category_name: e.target.value})} className="w-full px-4 py-3 border-2 border-purple-600 rounded-lg text-black font-semibold bg-purple-50 focus:outline-none" placeholder="Ketik nama kategori baru" />}
-              </div>
-              <div>
-                <label className="block text-base font-bold text-black mb-2">Satuan</label>
-                <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-black font-semibold focus:border-purple-600 focus:outline-none">
-                  <option value="Lembar">Lembar</option>
-                  <option value="Kg">Kg</option>
-                  <option value="Pcs">Pcs</option>
-                  <option value="Roll">Roll</option>
-                  <option value="Liter">Liter (Tinta)</option>
-                </select>
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-3 border-2 border-gray-300 bg-gray-100 text-black font-bold rounded-lg hover:bg-gray-200">Batal</button>
-                <button type="submit" className="px-5 py-3 bg-purple-700 border-2 border-purple-900 text-white font-bold rounded-lg hover:bg-purple-800">Simpan</button>
+              <div className="p-5 border-t-2 border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-3 border-2 border-gray-300 bg-white text-black font-bold rounded-xl hover:bg-gray-100 transition-all">Batal</button>
+                <button type="submit" className="px-8 py-3 bg-purple-600 border-2 border-purple-800 text-white font-bold rounded-xl hover:bg-purple-700 shadow-md transition-all">Simpan</button>
               </div>
             </form>
           </div>

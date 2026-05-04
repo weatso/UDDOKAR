@@ -39,7 +39,7 @@ export default function CetakSPKPage() {
   );
 
   return (
-    <div className="bg-gray-200 min-h-screen py-8 print:py-0 print:bg-transparent">
+    <div className="bg-gray-200 min-h-screen py-8 print:py-0 print:bg-transparent print:min-h-0">
       {/* Header Print */}
       <div className="flex justify-between p-4 mb-4 bg-gray-100 border border-gray-300 print:hidden max-w-[210mm] mx-auto">
         <Link href={`/produksi/${spkId}`} className="bg-gray-500 text-white px-6 py-2 rounded font-bold shadow hover:bg-gray-600 transition-colors flex items-center justify-center">
@@ -51,74 +51,74 @@ export default function CetakSPKPage() {
       </div>
 
       {/* A4 Printable Container */}
-      <div className="print:shadow-none print:border-none print:m-0 print:p-0 w-[210mm] max-w-full mx-auto bg-white shadow-2xl border-2 border-black font-mono text-black p-8">
+      <div className="print:shadow-none print:border-none w-full mx-auto bg-white shadow-2xl border-2 border-black font-mono text-black p-8">
         
         {/* Kop Surat */}
-        <div className="text-center border-b-4 border-black pb-4 mb-6">
-          <h1 className="text-4xl font-black tracking-tighter">UD DOKAR</h1>
-          <h2 className="text-2xl font-black mt-2 uppercase tracking-widest border-black inline-block border-b-2">SURAT PERINTAH KERJA (SPK)</h2>
-          <p className="font-bold mt-1 uppercase text-sm">Dokumen Internal Pabrik Produksi</p>
+        <div className="text-center border-b-4 border-black pb-2 mb-4">
+          <h1 className="text-3xl font-black tracking-tighter uppercase">UD DOKAR</h1>
+          <h2 className="text-xl font-black mt-1 uppercase tracking-widest border-black inline-block border-b-2">SURAT PERINTAH KERJA (SPK)</h2>
+          <p className="font-bold mt-0.5 uppercase text-[10px]">Dokumen Internal Pabrik Produksi</p>
         </div>
 
         {/* Info SPK */}
-        <div className="grid grid-cols-2 gap-8 mb-6 border-2 border-black p-4 text-sm">
+        <div className="grid grid-cols-2 gap-8 mb-4 border-2 border-black p-3 text-xs">
           <div>
-            <p className="font-bold mb-2">No. SPK : <span className="font-black text-lg ml-2">{order.spk_number}</span></p>
+            <p className="font-bold mb-1">No. SPK : <span className="font-black text-base ml-2">{order.spk_number}</span></p>
             <p className="font-bold">Diterbitkan : <span className="font-black ml-2">{formatDate(order.created_at)}</span></p>
           </div>
           <div className="text-right">
-            <p className="font-bold">Batas Waktu: <span className="font-black">Menyesuaikan</span></p>
-            <p className="font-bold mt-2 uppercase">Wajib Lapor Hasil Jika Selesai</p>
+            <p className="font-bold italic">Batas Waktu: <span className="font-black">Menyesuaikan</span></p>
+            <p className="font-bold mt-1 uppercase text-[10px]">Wajib Lapor Hasil Jika Selesai</p>
           </div>
         </div>
 
         {/* Target Produksi */}
-        <div className="border-2 border-black mb-6 flex">
-          <div className="w-2/3 p-4 border-r-2 border-black">
-            <p className="font-bold uppercase tracking-widest text-sm mb-1 border-b-2 border-black inline-block pb-1">Kardus yang Dibuat:</p>
-            <p className="text-2xl font-black mb-4 uppercase">{order.product?.name}</p>
+        <div className="border-2 border-black mb-4 flex">
+          <div className="w-2/3 p-3 border-r-2 border-black">
+            <p className="font-bold uppercase tracking-widest text-[10px] mb-1 border-b-2 border-black inline-block pb-0.5">Kardus yang Dibuat:</p>
+            <p className="text-xl font-black mb-2 uppercase leading-none">{order.product?.name}</p>
             
-            <p className="font-bold uppercase tracking-widest text-sm mb-1 border-b-2 border-black inline-block pb-1">Dimensi Cetak:</p>
-            <table className="w-full text-left font-bold text-sm mt-1">
+            <p className="font-bold uppercase tracking-widest text-[10px] mb-1 border-b-2 border-black inline-block pb-0.5">Dimensi Cetak:</p>
+            <table className="w-full text-left font-bold text-[11px] mt-0.5">
               <tbody>
-                <tr><td className="py-1">Panjang</td><td>: {order.product?.dimensions?.p} cm</td></tr>
-                <tr><td className="py-1">Lebar</td><td>: {order.product?.dimensions?.l} cm</td></tr>
-                <tr><td className="py-1">Tinggi</td><td>: {order.product?.dimensions?.t} cm</td></tr>
-                <tr><td className="py-1">Gramasi</td><td>: {order.product?.dimensions?.gramasi} gr</td></tr>
+                <tr><td className="py-0.5">Panjang</td><td>: {order.product?.dimensions?.p} cm</td></tr>
+                <tr><td className="py-0.5">Lebar</td><td>: {order.product?.dimensions?.l} cm</td></tr>
+                <tr><td className="py-0.5">Tinggi</td><td>: {order.product?.dimensions?.t} cm</td></tr>
+                <tr><td className="py-0.5">Gramasi</td><td>: {order.product?.dimensions?.gramasi} gr</td></tr>
               </tbody>
             </table>
           </div>
-          <div className="w-1/3 p-4 flex flex-col justify-center items-center bg-gray-100 text-center">
-            <p className="font-bold uppercase tracking-widest text-sm mb-2">Kuantitas Target</p>
-            <p className="text-5xl font-black">{order.target_quantity}</p>
-            <p className="font-black text-lg mt-2 uppercase">Lembar / Pcs</p>
+          <div className="w-1/3 p-3 flex flex-col justify-center items-center bg-gray-100 text-center">
+            <p className="font-bold uppercase tracking-widest text-[10px] mb-1">Target Produksi</p>
+            <p className="text-4xl font-black leading-none">{order.target_quantity}</p>
+            <p className="font-black text-sm mt-1 uppercase">Pcs / Lembar</p>
           </div>
         </div>
 
         {/* Form Laporan Operator (Kosong) */}
-        <div className="mb-8">
-          <p className="font-bold text-sm uppercase mb-2">Laporan Operator Mesin (Diisi Manual dengan Pulpen)</p>
-          <table className="w-full border-collapse border-2 border-black text-sm">
+        <div className="mb-4">
+          <p className="font-bold text-[10px] uppercase mb-1">Laporan Operator Mesin (Diisi Manual)</p>
+          <table className="w-full border-collapse border-2 border-black text-[11px]">
             <thead>
               <tr className="border-b-2 border-black bg-gray-100">
-                <th className="border-r-2 border-black p-3 text-left w-1/2 uppercase font-black">Pemakaian Bahan Baku</th>
-                <th className="p-3 text-left w-1/2 uppercase font-black">Hasil Jadi & Reject</th>
+                <th className="border-r-2 border-black p-2 text-left w-1/2 uppercase font-black tracking-tight">Pemakaian Bahan Baku</th>
+                <th className="p-2 text-left w-1/2 uppercase font-black tracking-tight">Hasil Jadi & Reject</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b-2 border-black">
-                <td className="border-r-2 border-black p-4 h-32 align-top font-bold">
-                  Total Kertas Terpakai (Kg/Lbr): <br/><br/><br/>
-                  Total Tinta Terpakai (Liter):
+                <td className="border-r-2 border-black p-2 h-20 align-top font-bold">
+                  Kertas Terpakai (Kg/Lbr): <br/><br/>
+                  Tinta Terpakai (Liter):
                 </td>
-                <td className="p-4 h-32 align-top font-bold">
-                  Total Kardus Sukses (Pcs): <br/><br/><br/>
-                  Kardus Cacat/Reject (Pcs):
+                <td className="p-2 h-20 align-top font-bold">
+                  Kardus Sukses (Pcs): <br/><br/>
+                  Kardus Reject (Pcs):
                 </td>
               </tr>
               <tr>
-                <td colSpan={2} className="p-4 h-24 align-top font-bold">
-                  Catatan Masalah Mesin / Produksi:
+                <td colSpan={2} className="p-2 h-16 align-top font-bold">
+                  Masalah Mesin / Produksi:
                 </td>
               </tr>
             </tbody>
@@ -126,16 +126,16 @@ export default function CetakSPKPage() {
         </div>
 
         {/* Tanda Tangan */}
-        <div className="flex justify-between mt-8 pt-4 text-sm">
-          <div className="text-center w-48">
-            <p className="font-bold mb-20 uppercase">Operator Mesin / Mandor</p>
+        <div className="flex justify-between mt-4 pt-2 text-[11px]">
+          <div className="text-center w-40">
+            <p className="font-bold mb-12 uppercase tracking-tighter">Operator Mesin / Mandor</p>
             <div className="border-b-2 border-black mx-auto"></div>
-            <p className="mt-2 font-black uppercase">(Nama Terang)</p>
+            <p className="mt-1 font-black uppercase">(Nama Terang)</p>
           </div>
-          <div className="text-center w-48">
-            <p className="font-bold mb-20 uppercase">Kepala Produksi (PPIC)</p>
+          <div className="text-center w-40">
+            <p className="font-bold mb-12 uppercase tracking-tighter">Kepala Produksi (PPIC)</p>
             <div className="border-b-2 border-black mx-auto"></div>
-            <p className="mt-2 font-black uppercase">UD Dokar</p>
+            <p className="mt-1 font-black uppercase underline">UD DOKAR</p>
           </div>
         </div>
       </div>

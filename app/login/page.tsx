@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Lock, Mail, Loader2, Box } from 'lucide-react';
+import { Lock, Mail, Loader2, Box, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,6 +27,9 @@ export default function LoginPage() {
       setError('Email atau password salah!');
       setIsLoading(false);
     } else {
+      // Set penanda sesi aktif di sessionStorage (hanya bertahan selama tab/window terbuka)
+      sessionStorage.setItem('active_session', 'true');
+      
       router.push('/');
       router.refresh();
     }
@@ -62,7 +66,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-12 pr-4 py-4 border-2 border-gray-300 rounded-xl text-black font-bold focus:ring-purple-600 focus:border-purple-600 outline-none"
-                  placeholder="admin@uddokar.com"
+                  placeholder="Masukkan email Anda"
                 />
               </div>
             </div>
@@ -74,13 +78,20 @@ export default function LoginPage() {
                   <Lock className="h-5 w-5 text-gray-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-12 pr-4 py-4 border-2 border-gray-300 rounded-xl text-black font-bold focus:ring-purple-600 focus:border-purple-600 outline-none"
+                  className="block w-full pl-12 pr-12 py-4 border-2 border-gray-300 rounded-xl text-black font-bold focus:ring-purple-600 focus:border-purple-600 outline-none"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
             </div>
           </div>

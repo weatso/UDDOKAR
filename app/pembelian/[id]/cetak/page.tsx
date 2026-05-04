@@ -44,7 +44,7 @@ export default function CetakPOPage() {
   );
 
   return (
-    <div className="bg-gray-200 min-h-screen py-8 print:py-0 print:bg-transparent">
+    <div className="bg-gray-200 min-h-screen py-8 print:py-0 print:bg-transparent print:min-h-0">
       {/* Header Print */}
       <div className="flex justify-between p-4 mb-4 bg-gray-100 border border-gray-300 print:hidden max-w-[210mm] mx-auto">
         <Link href={`/pembelian/${txId}`} className="bg-gray-500 text-white px-6 py-2 rounded font-bold shadow hover:bg-gray-600 transition-colors flex items-center justify-center">
@@ -56,7 +56,7 @@ export default function CetakPOPage() {
       </div>
 
       {/* A4 Printable Container */}
-      <div className="print:shadow-none print:border-none print:m-0 print:p-0 w-[210mm] max-w-full mx-auto bg-white shadow-2xl border-2 border-black font-mono text-black p-8">
+      <div className="print:shadow-none print:border-none w-full mx-auto bg-white shadow-2xl border-2 border-black font-mono text-black p-8">
         
         {/* Kop Surat */}
         <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-6">

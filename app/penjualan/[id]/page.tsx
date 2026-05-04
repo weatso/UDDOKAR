@@ -90,6 +90,9 @@ export default function DetailSOPage() {
   if (isLoading) return <div className="p-8 text-xl font-bold text-black">Memuat detail SO...</div>;
   if (!transaction) return <div className="p-8 text-xl font-bold text-red-600">Transaksi tidak ditemukan.</div>;
 
+  const discountMeta = (() => { try { return transaction.notes ? JSON.parse(transaction.notes) : null; } catch { return null; } })();
+  const subtotalBeforeDiscount = discountMeta?.subtotal_before_discount ?? transaction.total_amount;
+
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
       {/* Tombol Kembali & Header */}
@@ -115,7 +118,7 @@ export default function DetailSOPage() {
             </button>
           )}
 
-          <a href={`/penjualan/${transaction.id}/cetak`} target="_blank" rel="noopener noreferrer" className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg border-2 border-purple-900">
+          <a href={`/penjualan/${transaction.id}/cetak`} className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg border-2 border-purple-900">
             <Printer className="w-5 h-5" /> Cetak Dokumen
           </a>
         </div>
@@ -188,6 +191,21 @@ export default function DetailSOPage() {
               ))}
             </tbody>
             <tfoot className="bg-gray-50 border-t-4 border-gray-300">
+              {discountMeta && (
+                <>
+                  <tr>
+                    <td colSpan={3} className="px-6 py-3 text-gray-500 font-bold text-right uppercase text-sm">Subtotal</td>
+                    <td className="px-6 py-3 text-gray-500 font-black text-right text-lg">{formatRupiah(subtotalBeforeDiscount)}</td>
+                  </tr>
+                  <tr className="bg-green-50">
+                    <td colSpan={3} className="px-6 py-3 text-green-700 font-bold text-right uppercase text-sm">
+                      Diskon {discountMeta.discount_type === 'persen' ? `${discountMeta.discount_value}%` : 'Nominal'}
+                      {discountMeta.discount_label && <span className="block text-xs font-semibold normal-case text-green-600 italic">({discountMeta.discount_label})</span>}
+                    </td>
+                    <td className="px-6 py-3 text-green-700 font-black text-right text-lg">- {formatRupiah(discountMeta.discount_amount)}</td>
+                  </tr>
+                </>
+              )}
               <tr>
                 <td colSpan={3} className="px-6 py-4 text-black font-bold text-right uppercase">Grand Total</td>
                 <td className="px-6 py-4 text-purple-800 font-black text-right text-2xl">{formatRupiah(transaction.total_amount)}</td>
