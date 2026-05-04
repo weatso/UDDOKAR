@@ -238,7 +238,7 @@ export default function Home() {
                     if (timeframe === '1y') return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
                     return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
                   }}
-                  formatter={(value: number) => [formatRupiah(value), ""]}
+                  formatter={(value: any) => [formatRupiah(Number(value) || 0), ""]}
                   contentStyle={{ borderRadius: '12px', border: '2px solid #e5e7eb', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Legend verticalAlign="top" height={36}/>

@@ -9,7 +9,8 @@ interface StatusBadgeProps {
 export function StatusBadge({ status }: StatusBadgeProps) {
   let bgColor = 'bg-gray-200';
   let textColor = 'text-black';
-  let label = status;
+
+  let label: string = status; 
 
   switch (status) {
     case 'PAID':

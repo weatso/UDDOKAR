@@ -39,7 +39,7 @@ export default function BuatSPKPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.target_product_id || formData.target_quantity <= 0) {
+    if (!formData.target_product_id || Number(formData.target_quantity) <= 0) {
       return alert('Mohon lengkapi produk dan jumlah target produksi!');
     }
 

@@ -64,11 +64,23 @@ export default function LabaRugiPage() {
 
       // Group beban by COA
       const coaMap: Record<string, { name: string; code: string; total: number }> = {};
-      expData?.forEach(e => {
-        const key = e.coa?.code || 'LAINNYA';
-        if (!coaMap[key]) coaMap[key] = { name: e.coa?.name || 'Lainnya', code: key, total: 0 };
-        coaMap[key].total += Number(e.amount);
-      });
+
+expData?.forEach((e: any) => {
+  // Atasi masalah Supabase yang kadang mengembalikan data join sebagai array
+  const coaItem = Array.isArray(e.coa) ? e.coa[0] : e.coa;
+  
+  const key = coaItem?.code || 'LAINNYA';
+  
+  if (!coaMap[key]) {
+    coaMap[key] = { 
+      name: coaItem?.name || 'Lainnya', 
+      code: key, 
+      total: 0 
+    };
+  }
+  
+  coaMap[key].total += Number(e.amount);
+});
 
       setPendapatan([
         { label: 'Pendapatan Penjualan (SO)', amount: totalSO },
