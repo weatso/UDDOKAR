@@ -27,12 +27,11 @@ import {
 } from 'lucide-react';
 
 const keuanganSubMenu = [
-  { name: 'Dashboard Keuangan', href: '/keuangan', icon: Wallet },
-  { name: 'Chart of Accounts', href: '/keuangan/coa', icon: BookOpen },
-  { name: 'Transaksi Biaya', href: '/keuangan/transaksi', icon: TrendingDown },
-  { name: 'Laporan Laba Rugi', href: '/keuangan/laporan/laba-rugi', icon: BarChart3 },
-  { name: 'Laporan Arus Kas', href: '/keuangan/laporan/arus-kas', icon: ArrowLeftRight },
   { name: 'Aging Schedule', href: '/keuangan/laporan/aging', icon: Clock },
+  { name: 'Transaksi Biaya', href: '/keuangan/transaksi', icon: TrendingDown },
+  { name: 'COA', href: '/keuangan/coa', icon: BookOpen },
+  { name: 'Laporan Laba Rugi', href: '/keuangan/laporan/laba-rugi', icon: BarChart3 },
+  { name: 'Arus Kas', href: '/keuangan/laporan/arus-kas', icon: ArrowLeftRight },
 ];
 
 const menuItems = [
@@ -142,18 +141,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                 }
               </button>
 
-              {/* Sub-Menu with smooth animation */}
-              <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${
-                  isKeuanganOpen ? 'max-h-96 opacity-100 mt-1.5' : 'max-h-0 opacity-0'
-                }`}
-              >
-                <div className="ml-4 pl-3 border-l-2 border-purple-200 space-y-1">
+              {/* Sub-Menu */}
+              {isKeuanganOpen && (
+                <div className="mt-1.5 ml-4 pl-3 border-l-2 border-purple-200 space-y-1">
                   {keuanganSubMenu.map((sub) => {
-                    // Exact match for root /keuangan, startsWith for sub-paths
-                    const isSubActive = sub.href === '/keuangan'
-                      ? pathname === '/keuangan'
-                      : pathname.startsWith(sub.href);
+                    const isSubActive = pathname.startsWith(sub.href);
                     const Icon = sub.icon;
                     return (
                       <Link
@@ -172,7 +164,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                     );
                   })}
                 </div>
-              </div>
+              )}
             </div>
           </nav>
         </div>
