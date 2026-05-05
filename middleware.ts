@@ -36,9 +36,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // If user is logged in and tries to access /login, redirect to dashboard
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
-    return NextResponse.redirect(new URL('/', request.url))
+  // If user is logged in
+  if (user) {
+    // 1. Prevent access to /login
+    if (request.nextUrl.pathname.startsWith('/login')) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    // 2. Role-Based Access Control for Admin
+    if (request.nextUrl.pathname.startsWith('/keuangan') || request.nextUrl.pathname.startsWith('/hr')) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile?.role === 'admin') {
+        return NextResponse.redirect(new URL('/stok', request.url))
+      }
+    }
   }
 
   return response

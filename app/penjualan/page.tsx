@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Plus, Calendar, User, Receipt, ArrowRight } from 'lucide-react';
+import { Plus, Calendar, User, Receipt, ArrowRight, Monitor } from 'lucide-react';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Pagination } from '@/components/shared/Pagination';
 
@@ -47,9 +47,14 @@ export default function PenjualanPage() {
           <h1 className="text-2xl font-bold text-black">Penjualan (SO Outbound)</h1>
           <p className="text-black font-semibold mt-2 text-base">Riwayat penjualan kardus ke pelanggan.</p>
         </div>
-        <Link href="/penjualan/buat" className="w-full md:w-auto bg-purple-700 hover:bg-purple-800 text-white border-2 border-purple-900 px-5 py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 shadow-md transition-all">
-          <Plus className="w-5 h-5" /> Buat SO Baru
-        </Link>
+        <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
+          <Link href="/penjualan/buat" className="flex-1 sm:flex-none bg-purple-700 hover:bg-purple-800 text-white border-2 border-purple-900 px-5 py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 shadow-md transition-all">
+            <Monitor className="w-5 h-5" /> Mode Kasir (POS)
+          </Link>
+          <Link href="/penjualan/buat" className="flex-1 sm:flex-none bg-white hover:bg-gray-50 text-purple-700 border-2 border-purple-300 px-5 py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
+            <Plus className="w-5 h-5" /> Buat SO Baru
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border-2 border-gray-300 shadow-md overflow-hidden">

@@ -6,11 +6,13 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Receipt, Printer, Ban } from 'lucide-react';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { useRole } from '@/lib/hooks/useRole';
 
 export default function DetailSOPage() {
   const params = useParams();
   const router = useRouter();
   const txId = params.id as string;
+  const { role } = useRole();
 
   const [transaction, setTransaction] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -108,8 +110,8 @@ export default function DetailSOPage() {
         </div>
         
         <div className="flex flex-wrap gap-3">
-          {/* Tombol Void (Hanya muncul jika belum lunas & belum void) */}
-          {transaction.status !== 'PAID' && !transaction.is_void && (
+          {/* Tombol Void (Hanya muncul jika belum lunas, belum void, dan USER ADALAH OWNER) */}
+          {transaction.status !== 'PAID' && !transaction.is_void && role === 'owner' && (
             <button 
               onClick={handleVoid}
               className="bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-lg font-bold flex items-center gap-2 border-2 border-red-900 shadow-md transition-all"

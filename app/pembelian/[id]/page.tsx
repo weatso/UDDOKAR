@@ -6,11 +6,13 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Receipt, Printer, Ban, CheckCircle2, Truck } from 'lucide-react';
 import { StatusBadge } from '@/components/shared/StatusBadge';
+import { useRole } from '@/lib/hooks/useRole';
 
 export default function DetailPOPage() {
   const params = useParams();
   const router = useRouter();
   const txId = params.id as string;
+  const { role } = useRole();
 
   const [transaction, setTransaction] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -102,7 +104,7 @@ export default function DetailPOPage() {
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
-          {!transaction.is_void && <button onClick={handleVoid} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 border-2 border-red-900 transition-all shadow-md"><Ban size={18} /> Void</button>}
+          {!transaction.is_void && role === 'owner' && <button onClick={handleVoid} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 border-2 border-red-900 transition-all shadow-md"><Ban size={18} /> Void</button>}
           <a href={`/pembelian/${transaction.id}/cetak`} className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 border-2 border-purple-900 transition-all shadow-md"><Printer size={18} /> Cetak PO</a>
         </div>
       </div>
