@@ -7,27 +7,22 @@ import { ArrowLeft, ArrowLeftRight, ArrowDownCircle, ArrowUpCircle } from 'lucid
 
 export default function ArusKasPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
-  const [filterMonth, setFilterMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const [startDate, setStartDate] = useState(firstDay.toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(today.toISOString().split('T')[0]);
 
   const [kasmasuk, setKasMasuk] = useState<any[]>([]);
   const [kaskeluar, setKasKeluar] = useState<any[]>([]);
   const [totalMasuk, setTotalMasuk] = useState(0);
   const [totalKeluar, setTotalKeluar] = useState(0);
 
-  const months = Array.from({ length: 12 }, (_, i) => ({
-    value: String(i + 1).padStart(2, '0'),
-    label: new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date(2000, i, 1))
-  }));
-
-  useEffect(() => { fetchReport(); }, [filterYear, filterMonth]);
+  useEffect(() => { fetchReport(); }, [startDate, endDate]);
 
   const fetchReport = async () => {
     setIsLoading(true);
     try {
-      const startDate = `${filterYear}-${filterMonth}-01`;
-      const endDay = new Date(parseInt(filterYear), parseInt(filterMonth), 0).getDate();
-      const endDate = `${filterYear}-${filterMonth}-${String(endDay).padStart(2, '0')}`;
+      // Use state dates directly
 
       // Kas Masuk: Pembayaran dari pelanggan (payments terkait SO_OUTBOUND)
       const { data: paymentsIn } = await supabase
@@ -95,18 +90,14 @@ export default function ArusKasPage() {
       {/* Filter */}
       <div className="flex flex-wrap gap-3 mb-6 bg-white p-4 rounded-2xl border-2 border-gray-200 shadow-sm">
         <div>
-          <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Tahun</label>
-          <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
-            className="px-3 py-2 border-2 border-gray-300 rounded-xl font-bold text-black focus:border-purple-500 focus:outline-none bg-white text-sm">
-            {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Dari Tanggal</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+            className="px-3 py-2 border-2 border-gray-300 rounded-xl font-bold text-black focus:border-purple-500 focus:outline-none bg-white text-sm" />
         </div>
         <div>
-          <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Bulan</label>
-          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
-            className="px-3 py-2 border-2 border-gray-300 rounded-xl font-bold text-black focus:border-purple-500 focus:outline-none bg-white text-sm">
-            {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
+          <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5">Sampai Tanggal</label>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+            className="px-3 py-2 border-2 border-gray-300 rounded-xl font-bold text-black focus:border-purple-500 focus:outline-none bg-white text-sm" />
         </div>
       </div>
 

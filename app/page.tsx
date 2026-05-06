@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Package, Wallet, Factory, CreditCard, AlertTriangle, CalendarDays, TrendingUp } from "lucide-react";
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useRole } from '@/lib/hooks/useRole';
 import { 
   AreaChart, 
   Area, 
@@ -23,12 +24,14 @@ export default function Home() {
     overdue: 0, 
     hutang: 0, 
     netProfit: 0, 
-    overdueSchedules: [] as any[]
+    overdueSchedules: [] as any[],
+    unreceivedItems: [] as any[]
   });
   const [chartData, setChartData] = useState<any[]>([]);
-  const [timeframe, setTimeframe] = useState<'7d' | '30d' | '1y'>('30d');
+  const [timeframe, setTimeframe] = useState<'mtd' | '7d' | '30d' | '1y'>('mtd');
   const [isLoading, setIsLoading] = useState(true);
   const [isChartLoading, setIsChartLoading] = useState(true);
+  const { role, loading: roleLoading } = useRole();
 
   // Fetch basic stats (only once or when needed)
   useEffect(() => {
@@ -37,13 +40,18 @@ export default function Home() {
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
 
-        const [rawRes, finishedRes, spkRes, piutangRes, hutangRes, schedulesRes] = await Promise.all([
+        const [rawRes, finishedRes, spkRes, piutangRes, hutangRes, schedulesRes, unreceivedRes] = await Promise.all([
           supabase.from('products').select('stock_quantity').eq('type', 'RAW').eq('is_active', true),
           supabase.from('products').select('stock_quantity').eq('type', 'FINISHED').eq('is_active', true),
           supabase.from('production_orders').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
           supabase.from('transactions').select('total_amount, amount_paid').eq('type', 'SO_OUTBOUND').neq('status', 'PAID').eq('is_void', false),
           supabase.from('transactions').select('total_amount, amount_paid').eq('type', 'PO_INBOUND').neq('status', 'PAID').eq('is_void', false),
-          supabase.from('payment_schedules').select('id, amount_to_pay, due_date, status, transaction:transactions!inner(type, status, contact:contacts(name))').eq('status', 'UNPAID').neq('transaction.status', 'PAID').lte('due_date', todayStr).order('due_date', { ascending: true }).limit(5)
+          supabase.from('payment_schedules').select('id, amount_to_pay, due_date, status, transaction:transactions!inner(type, status, contact:contacts(name))').eq('status', 'UNPAID').neq('transaction.status', 'PAID').lte('due_date', todayStr).order('due_date', { ascending: true }).limit(5),
+          supabase.from('transaction_items').select(`
+            id, quantity, qty_received, 
+            product:products(name),
+            transaction:transactions!inner(id, type, is_void, contact:contacts(name))
+          `).eq('transaction.type', 'PO_INBOUND').eq('transaction.is_void', false)
         ]);
 
         const rawStock = rawRes.data?.reduce((acc, curr) => acc + Number(curr.stock_quantity), 0) || 0;
@@ -55,6 +63,8 @@ export default function Home() {
         const { data: hutangLunas } = await supabase.from('transactions').select('amount_paid').eq('type', 'PO_INBOUND').eq('status', 'PAID').eq('is_void', false);
         const netProfit = (piutangLunas?.reduce((acc, curr) => acc + Number(curr.amount_paid), 0) || 0) - (hutangLunas?.reduce((acc, curr) => acc + Number(curr.amount_paid), 0) || 0);
 
+        const unreceivedItems = (unreceivedRes.data || []).filter((item: any) => (item.qty_received || 0) < item.quantity);
+
         setStats({ 
           rawStock, 
           finishedStock, 
@@ -62,7 +72,8 @@ export default function Home() {
           overdue, 
           hutang, 
           netProfit, 
-          overdueSchedules: schedulesRes.data || []
+          overdueSchedules: schedulesRes.data || [],
+          unreceivedItems
         });
       } catch (err) { console.error(err); }
       finally { setIsLoading(false); }
@@ -80,7 +91,9 @@ export default function Home() {
         
         let daysToFetch = 30;
         if (timeframe === '7d') daysToFetch = 7;
+        else if (timeframe === '30d') daysToFetch = 30;
         else if (timeframe === '1y') daysToFetch = 365;
+        else if (timeframe === 'mtd') daysToFetch = today.getDate() - 1;
         
         startDate.setDate(today.getDate() - daysToFetch);
         const startDateStr = startDate.toISOString().split('T')[0];
@@ -148,107 +161,157 @@ export default function Home() {
         <StatCard title="Total Stok Mentah" value={stats.rawStock} icon={<Package />} color="purple" isLoading={isLoading} />
         <StatCard title="Stok Kardus Jadi" value={stats.finishedStock} icon={<BoxIcon />} color="purple" isLoading={isLoading} />
         <StatCard title="SPK Berjalan" value={stats.activeSPK} icon={<Factory />} color="purple" isLoading={isLoading} />
-        <StatCard title="Total Piutang Berjalan" value={formatRupiah(stats.overdue)} icon={<Wallet />} color="purple" isLoading={isLoading} />
-        <StatCard title="Total Hutang Berjalan" value={formatRupiah(stats.hutang)} icon={<CreditCard />} color="red" isLoading={isLoading} />
-        <StatCard title="Estimasi Laba Bersih" value={formatRupiah(stats.netProfit)} icon={<TrendingUp />} color="green" isLoading={isLoading} />
+        {role === 'owner' && (
+          <>
+            <StatCard title="Total Piutang Berjalan" value={formatRupiah(stats.overdue)} icon={<Wallet />} color="purple" isLoading={isLoading} />
+            <StatCard title="Total Hutang Berjalan" value={formatRupiah(stats.hutang)} icon={<CreditCard />} color="red" isLoading={isLoading} />
+            <StatCard title="Estimasi Laba Bersih" value={formatRupiah(stats.netProfit)} icon={<TrendingUp />} color="green" isLoading={isLoading} />
+          </>
+        )}
       </div>
 
-      {/* Pengingat Jatuh Tempo */}
+      {/* Barang Belum Diterima */}
       <div className="bg-white border-2 border-gray-300 rounded-xl p-4 md:p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-4 border-b-2 border-gray-200 pb-3">
-          <div className="bg-red-100 p-2 rounded-lg text-red-600 border border-red-200">
-            <AlertTriangle className="w-6 h-6" />
+          <div className="bg-blue-100 p-2 rounded-lg text-blue-600 border border-blue-200">
+            <Package className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-gray-800">🚨 Pengingat Jatuh Tempo</h2>
+          <h2 className="text-xl font-bold text-gray-800">Barang Belum Diterima (PO)</h2>
         </div>
         
-        {stats.overdueSchedules.length > 0 ? (
+        {stats.unreceivedItems.length > 0 ? (
           <div className="grid gap-3">
-            {stats.overdueSchedules.map((schedule: any) => (
-              <div key={schedule.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-white p-4 rounded-lg border-2 border-red-200 shadow-sm gap-4 hover:border-red-400 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-2 py-1 text-xs font-bold rounded border ${schedule.transaction?.type === 'PO_INBOUND' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-blue-100 text-blue-800 border-blue-300'}`}>
-                      {schedule.transaction?.type === 'PO_INBOUND' ? 'HUTANG (PO)' : 'PIUTANG (SO)'}
-                    </span>
-                    <span className="font-bold text-gray-800 truncate">{schedule.transaction?.contact?.name}</span>
+            {stats.unreceivedItems.map((item: any) => {
+              const sisa = item.quantity - (item.qty_received || 0);
+              return (
+                <div key={item.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm gap-4 hover:border-blue-400 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-1 text-xs font-bold rounded border bg-blue-100 text-blue-800 border-blue-300">
+                        {item.transaction?.contact?.name || 'Unknown Supplier'}
+                      </span>
+                      <span className="font-bold text-gray-800 truncate">{item.product?.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-gray-600 font-semibold text-sm mt-2">
+                      Dipesan: {item.quantity} | Diterima: {item.qty_received || 0}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-red-600 font-semibold text-sm">
-                    <CalendarDays className="w-4 h-4" /> Jatuh Tempo: {new Date(schedule.due_date).toLocaleDateString('id-ID')}
+                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                    <span className="text-lg font-black text-red-600">Kurang: {sisa}</span>
+                    <Link href={`/pembelian/${item.transaction?.id}`} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-sm text-center border-2 border-blue-800 shadow-sm">Terima</Link>
                   </div>
                 </div>
-                <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-                  <span className="text-lg font-black text-red-700">{formatRupiah(schedule.amount_to_pay)}</span>
-                  <Link href="/keuangan" className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-sm text-center border-2 border-red-800">Bayar</Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-            <p className="text-green-700 font-bold text-lg">✅ Semua tagihan aman, tidak ada yang menunggak hari ini.</p>
+            <p className="text-green-700 font-bold text-lg">✅ Semua pesanan pembelian telah diterima.</p>
           </div>
         )}
       </div>
 
-      {/* Matriks Keuangan */}
-      <div className="bg-white border-2 border-gray-300 rounded-xl p-4 md:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b-2 border-gray-100 pb-4">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <TrendingUp className="text-purple-700" /> Matriks Keuangan
-          </h2>
-          <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
-            <button onClick={() => setTimeframe('7d')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === '7d' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>1 MINGGU</button>
-            <button onClick={() => setTimeframe('30d')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === '30d' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>1 BULAN</button>
-            <button onClick={() => setTimeframe('1y')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === '1y' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>1 TAHUN</button>
+      {/* Pengingat Jatuh Tempo */}
+      {role === 'owner' && (
+        <div className="bg-white border-2 border-gray-300 rounded-xl p-4 md:p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4 border-b-2 border-gray-200 pb-3">
+            <div className="bg-red-100 p-2 rounded-lg text-red-600 border border-red-200">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">🚨 Pengingat Jatuh Tempo</h2>
           </div>
-        </div>
-        
-        <div className="h-80 w-full">
-          {isChartLoading ? (
-            <div className="h-full flex items-center justify-center bg-gray-50 rounded-lg animate-pulse font-bold text-gray-400">Memproses Data Grafik...</div>
+          
+          {stats.overdueSchedules.length > 0 ? (
+            <div className="grid gap-3">
+              {stats.overdueSchedules.map((schedule: any) => (
+                <div key={schedule.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-white p-4 rounded-lg border-2 border-red-200 shadow-sm gap-4 hover:border-red-400 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-1 text-xs font-bold rounded border ${schedule.transaction?.type === 'PO_INBOUND' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-blue-100 text-blue-800 border-blue-300'}`}>
+                        {schedule.transaction?.type === 'PO_INBOUND' ? 'HUTANG (PO)' : 'PIUTANG (SO)'}
+                      </span>
+                      <span className="font-bold text-gray-800 truncate">{schedule.transaction?.contact?.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-red-600 font-semibold text-sm">
+                      <CalendarDays className="w-4 h-4" /> Jatuh Tempo: {new Date(schedule.due_date).toLocaleDateString('id-ID')}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                    <span className="text-lg font-black text-red-700">{formatRupiah(schedule.amount_to_pay)}</span>
+                    <Link href="/keuangan" className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-sm text-center border-2 border-red-800">Bayar</Link>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorPemasukan" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorPengeluaran" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(str) => {
-                    const d = new Date(str);
-                    if (timeframe === '1y') return d.toLocaleDateString('id-ID', { month: 'short' });
-                    return `${d.getDate()}/${d.getMonth() + 1}`;
-                  }} 
-                  tick={{fontSize: 12, fontWeight: 'bold'}} 
-                  stroke="#666" 
-                />
-                <YAxis hide />
-                <Tooltip 
-                  labelFormatter={(value) => {
-                    const d = new Date(value);
-                    if (timeframe === '1y') return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-                    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-                  }}
-                  formatter={(value: any) => [formatRupiah(Number(value) || 0), ""]}
-                  contentStyle={{ borderRadius: '12px', border: '2px solid #e5e7eb', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend verticalAlign="top" height={36}/>
-                <Area type="monotone" dataKey="pemasukan" name="Pemasukan (SO)" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorPemasukan)" />
-                <Area type="monotone" dataKey="pengeluaran" name="Pengeluaran (PO)" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorPengeluaran)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+              <p className="text-green-700 font-bold text-lg">✅ Semua tagihan aman, tidak ada yang menunggak hari ini.</p>
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Matriks Keuangan */}
+      {role === 'owner' && (
+        <div className="bg-white border-2 border-gray-300 rounded-xl p-4 md:p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b-2 border-gray-100 pb-4">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <TrendingUp className="text-purple-700" /> Matriks Keuangan
+            </h2>
+            <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
+              <button onClick={() => setTimeframe('mtd')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === 'mtd' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>BULAN INI</button>
+              <button onClick={() => setTimeframe('7d')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === '7d' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>1 MINGGU</button>
+              <button onClick={() => setTimeframe('30d')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === '30d' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>1 BULAN</button>
+              <button onClick={() => setTimeframe('1y')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-black transition-all ${timeframe === '1y' ? 'bg-white text-purple-700 shadow-sm border border-purple-200' : 'text-gray-500 hover:text-black'}`}>1 TAHUN</button>
+            </div>
+          </div>
+          
+          <div className="h-80 w-full">
+            {isChartLoading ? (
+              <div className="h-full flex items-center justify-center bg-gray-50 rounded-lg animate-pulse font-bold text-gray-400">Memproses Data Grafik...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorPemasukan" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorPengeluaran" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={(str) => {
+                      const d = new Date(str);
+                      if (timeframe === '1y') return d.toLocaleDateString('id-ID', { month: 'short' });
+                      return `${d.getDate()}/${d.getMonth() + 1}`;
+                    }} 
+                    tick={{fontSize: 12, fontWeight: 'bold'}} 
+                    stroke="#666" 
+                  />
+                  <YAxis hide />
+                  <Tooltip 
+                    labelFormatter={(value) => {
+                      const d = new Date(value);
+                      if (timeframe === '1y') return d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+                    }}
+                    formatter={(value: any) => [formatRupiah(Number(value) || 0), ""]}
+                    contentStyle={{ borderRadius: '12px', border: '2px solid #e5e7eb', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend verticalAlign="top" height={36}/>
+                  <Area type="monotone" dataKey="pemasukan" name="Pemasukan (SO)" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorPemasukan)" />
+                  <Area type="monotone" dataKey="pengeluaran" name="Pengeluaran (PO)" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorPengeluaran)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

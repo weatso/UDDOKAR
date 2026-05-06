@@ -119,6 +119,14 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         <div className="flex-1 overflow-y-auto">
           <nav className="p-4 space-y-6">
             
+            {/* DASHBOARD UTAMA */}
+            <div>
+              <Link href="/" onClick={onClose} className={linkClass(pathname === '/')}>
+                <LayoutDashboard className={`w-5 h-5 shrink-0 ${pathname === '/' ? 'text-purple-700' : 'text-gray-600'}`} />
+                <span>{fetchedRole === 'owner' ? 'Dashboard Owner' : 'Dashboard Utama'}</span>
+              </Link>
+            </div>
+
             {/* GROUP 1: KEUANGAN (OWNER ONLY) */}
             {fetchedRole === 'owner' && (
               <div>
@@ -185,10 +193,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Inventori & Master</p>
               <div className="space-y-1">
-                <Link href="/stok" onClick={onClose} className={linkClass(pathname.startsWith('/stok'))}>
-                  <Archive className={`w-5 h-5 shrink-0 ${pathname.startsWith('/stok') ? 'text-purple-700' : 'text-gray-600'}`} />
-                  <span>Stok Gudang</span>
-                </Link>
                 <Link href="/master-data/barang-mentah" onClick={onClose} className={linkClass(pathname.startsWith('/master-data/barang-mentah'))}>
                   <Package className={`w-5 h-5 shrink-0 ${pathname.startsWith('/master-data/barang-mentah') ? 'text-purple-700' : 'text-gray-600'}`} />
                   <span>Barang Mentah</span>
@@ -206,19 +210,21 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
 
 
             {/* GROUP 4: SISTEM & HR */}
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Sistem & HR</p>
-              <div className="space-y-1">
-                <Link href="/hr" onClick={onClose} className={linkClass(pathname.startsWith('/hr'))}>
-                  <Users className={`w-5 h-5 shrink-0 ${pathname.startsWith('/hr') ? 'text-purple-700' : 'text-gray-600'}`} />
-                  <span>Manajemen Karyawan</span>
-                </Link>
-                <Link href="/pengaturan" onClick={onClose} className={linkClass(pathname.startsWith('/pengaturan'))}>
-                  <Settings className={`w-5 h-5 shrink-0 ${pathname.startsWith('/pengaturan') ? 'text-purple-700' : 'text-gray-600'}`} />
-                  <span>Pengaturan Sistem</span>
-                </Link>
+            {fetchedRole === 'owner' && (
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Sistem & HR</p>
+                <div className="space-y-1">
+                  <Link href="/hr" onClick={onClose} className={linkClass(pathname.startsWith('/hr'))}>
+                    <Users className={`w-5 h-5 shrink-0 ${pathname.startsWith('/hr') ? 'text-purple-700' : 'text-gray-600'}`} />
+                    <span>Manajemen Karyawan</span>
+                  </Link>
+                  <Link href="/pengaturan" onClick={onClose} className={linkClass(pathname.startsWith('/pengaturan'))}>
+                    <Settings className={`w-5 h-5 shrink-0 ${pathname.startsWith('/pengaturan') ? 'text-purple-700' : 'text-gray-600'}`} />
+                    <span>Pengaturan Sistem</span>
+                  </Link>
+                </div>
               </div>
-            </div>
+            )}
 
           </nav>
         </div>

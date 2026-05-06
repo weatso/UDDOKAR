@@ -51,13 +51,43 @@ export default function AgingSchedulePage() {
     if (nominal <= 0) return alert('Nominal harus lebih dari 0');
     if (nominal > sisa) return alert(`Nominal (${formatRupiah(nominal)}) melebihi sisa tagihan (${formatRupiah(sisa)})`);
     try {
-      const { error } = await supabase.from('payments').insert([{
+      // 1. Ambil data transaksi terbaru dari database untuk memastikan amount_paid akurat
+      const { data: currentTx, error: fetchError } = await supabase
+        .from('transactions')
+        .select('total_amount, amount_paid')
+        .eq('id', selectedTx.id)
+        .single();
+        
+      if (fetchError) throw fetchError;
+
+      const currentPaidAmount = currentTx.amount_paid || 0;
+      const grandTotal = currentTx.total_amount || 0;
+      
+      // 2. Kalkulasi Akumulasi
+      const newPaidAmount = currentPaidAmount + nominal;
+      const isLunas = newPaidAmount >= grandTotal;
+      const newStatus = isLunas ? 'PAID' : 'PARTIAL'; // Menggunakan PAID sesuai standar DB (sebelumnya UNPAID/PARTIAL)
+
+      // 3. Catat ke tabel payments
+      const { error: paymentError } = await supabase.from('payments').insert([{
         transaction_id: selectedTx.id,
         amount: nominal,
         payment_date: paymentForm.payment_date,
         payment_method: paymentForm.payment_method
       }]);
-      if (error) throw error;
+      if (paymentError) throw paymentError;
+
+      // 4. Update Database: akumulasi paid_amount dan update status di tabel transaksi
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({ 
+          amount_paid: newPaidAmount,
+          status: newStatus
+        })
+        .eq('id', selectedTx.id);
+        
+      if (updateError) throw updateError;
+
       alert('Pembayaran berhasil dicatat!');
       setIsModalOpen(false);
       fetchTransactions();

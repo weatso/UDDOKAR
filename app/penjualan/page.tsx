@@ -51,9 +51,6 @@ export default function PenjualanPage() {
           <Link href="/penjualan/buat" className="flex-1 sm:flex-none bg-purple-700 hover:bg-purple-800 text-white border-2 border-purple-900 px-5 py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 shadow-md transition-all">
             <Monitor className="w-5 h-5" /> Mode Kasir (POS)
           </Link>
-          <Link href="/penjualan/buat" className="flex-1 sm:flex-none bg-white hover:bg-gray-50 text-purple-700 border-2 border-purple-300 px-5 py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
-            <Plus className="w-5 h-5" /> Buat SO Baru
-          </Link>
         </div>
       </div>
 

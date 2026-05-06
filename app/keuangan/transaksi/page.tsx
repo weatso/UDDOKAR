@@ -21,7 +21,6 @@ export default function TransaksiBiayaPage() {
     description: '',
     amount: '',
     transaction_date: new Date().toISOString().split('T')[0],
-    notes: '',
   });
 
   useEffect(() => { fetchCOA(); }, []);
@@ -65,12 +64,11 @@ export default function TransaksiBiayaPage() {
         description: form.description,
         amount: Number(form.amount),
         transaction_date: form.transaction_date,
-        notes: form.notes || null,
       }]);
       if (error) throw error;
       alert('Biaya berhasil dicatat!');
       setIsModalOpen(false);
-      setForm({ coa_id: '', description: '', amount: '', transaction_date: new Date().toISOString().split('T')[0], notes: '' });
+      setForm({ coa_id: '', description: '', amount: '', transaction_date: new Date().toISOString().split('T')[0] });
       fetchExpenses();
     } catch (err: any) { alert(err.message); }
     finally { setIsSubmitting(false); }
@@ -267,18 +265,16 @@ export default function TransaksiBiayaPage() {
 
               <div>
                 <label className="block text-sm font-bold text-black mb-1.5">Jumlah (Rp)</label>
-                <input required type="number" min="1" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})}
-                  placeholder="Masukkan nominal dalam Rupiah"
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl font-black text-black text-xl focus:border-red-500 focus:outline-none" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-black mb-1.5">
-                  Catatan Tambahan <span className="text-gray-400 font-normal">(opsional)</span>
-                </label>
-                <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2}
-                  placeholder="Detail atau keterangan tambahan..."
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-xl font-medium text-black focus:border-red-500 focus:outline-none resize-none" />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-500">Rp</span>
+                  <input required type="text" value={form.amount ? new Intl.NumberFormat('id-ID').format(Number(form.amount)) : ''} 
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      setForm({...form, amount: val});
+                    }}
+                    placeholder="0"
+                    className="w-full pl-12 pr-4 py-2.5 border-2 border-gray-300 rounded-xl font-black text-black text-xl focus:border-red-500 focus:outline-none" />
+                </div>
               </div>
 
               <div className="flex gap-3 pt-1">

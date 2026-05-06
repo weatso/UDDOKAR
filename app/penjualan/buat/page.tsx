@@ -31,10 +31,8 @@ export default function BuatSOPage() {
   const [formData, setFormData] = useState({ contact_id: '', created_at: new Date().toISOString().split('T')[0] });
   const [cart, setCart] = useState<any[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
-  const [tenor, setTenor] = useState(1);
-  const [interval, setIntervalVal] = useState(1);
-  const [dpAmount, setDpAmount] = useState<number>(0);
-  const [intervalUnit, setIntervalUnit] = useState<'Bulan' | 'Hari'>('Bulan');
+  const [tenor, setTenor] = useState<number | string>(1);
+  const [dpPercent, setDpPercent] = useState<number | string>(0);
 
   // State Diskon
   const [discountType, setDiscountType] = useState<'persen' | 'nominal'>('persen');
@@ -115,8 +113,13 @@ export default function BuatSOPage() {
     const validItems = cart.filter(i => i.product_id && i.quantity > 0 && i.price >= 0);
     if (validItems.length === 0) return alert('Isi minimal 1 kardus!');
 
-    if (isRecurring && dpAmount > 0 && dpAmount >= totalTagihan) {
-      return alert('Uang Muka (DP) tidak boleh sama atau lebih besar dari Total Tagihan!');
+    const calculatedDpAmount = Math.floor(totalTagihan * (Number(dpPercent) / 100));
+
+    if (isRecurring && calculatedDpAmount >= totalTagihan && totalTagihan > 0) {
+      return alert('DP tidak boleh 100% atau lebih dari Total Tagihan!');
+    }
+    if (isRecurring && (!tenor || Number(tenor) <= 0)) {
+      return alert('Tenor cicilan harus minimal 1 bulan!');
     }
 
     setIsSubmitting(true);
@@ -134,7 +137,7 @@ export default function BuatSOPage() {
         type: 'SO_OUTBOUND', 
         status: isRecurring ? 'UNPAID' : 'PAID', 
         total_amount: totalTagihan, 
-        amount_paid: isRecurring ? 0 : totalTagihan, 
+        amount_paid: isRecurring ? calculatedDpAmount : totalTagihan, 
         created_at: formData.created_at,
         notes: discountMeta ? JSON.stringify(discountMeta) : null
       }]).select().single();
@@ -148,33 +151,29 @@ export default function BuatSOPage() {
       })));
       if (itemsError) throw itemsError;
 
-      if (isRecurring && tenor > 0) {
-        const remainingToInstallment = totalTagihan - (dpAmount || 0);
-        const baseAmount = remainingToInstallment > 0 ? Math.floor(remainingToInstallment / tenor) : 0;
-        const remainder = remainingToInstallment > 0 ? remainingToInstallment - (baseAmount * tenor) : 0;
+      const activeTenor = Number(tenor);
+      if (isRecurring && activeTenor > 0) {
+        const remainingToInstallment = totalTagihan - calculatedDpAmount;
+        const baseAmount = remainingToInstallment > 0 ? Math.floor(remainingToInstallment / activeTenor) : 0;
+        const remainder = remainingToInstallment > 0 ? remainingToInstallment - (baseAmount * activeTenor) : 0;
         const schedules = [];
         
         let [year, month, day] = formData.created_at.split('-').map(Number);
 
-        if (dpAmount > 0) {
-          schedules.push({ transaction_id: txData.id, amount_to_pay: dpAmount, due_date: formData.created_at, status: 'UNPAID' });
+        if (calculatedDpAmount > 0) {
+          schedules.push({ transaction_id: txData.id, amount_to_pay: calculatedDpAmount, due_date: formData.created_at, status: 'UNPAID' });
         }
 
         if (remainingToInstallment > 0) {
-          for (let i = 0; i < tenor; i++) {
+          for (let i = 0; i < activeTenor; i++) {
             let dueStr = '';
-            if (intervalUnit === 'Bulan') {
-              const totalMonthsToAdd = interval * (i + 1);
-              const targetDate = new Date(year, month - 1 + totalMonthsToAdd, day);
-              const expectedMonth = ((month - 1 + totalMonthsToAdd) % 12 + 12) % 12;
-              if (targetDate.getMonth() !== expectedMonth) targetDate.setDate(0);
-              dueStr = targetDate.toISOString().split('T')[0];
-            } else {
-              const d = new Date(year, month - 1, day);
-              d.setDate(d.getDate() + (interval * (i + 1)));
-              dueStr = d.toISOString().split('T')[0];
-            }
-            const amount = i === tenor - 1 ? baseAmount + remainder : baseAmount;
+            const totalMonthsToAdd = i + 1;
+            const targetDate = new Date(year, month - 1 + totalMonthsToAdd, day);
+            const expectedMonth = ((month - 1 + totalMonthsToAdd) % 12 + 12) % 12;
+            if (targetDate.getMonth() !== expectedMonth) targetDate.setDate(0);
+            dueStr = targetDate.toISOString().split('T')[0];
+            
+            const amount = i === activeTenor - 1 ? baseAmount + remainder : baseAmount;
             schedules.push({ transaction_id: txData.id, amount_to_pay: amount, due_date: dueStr, status: 'UNPAID' });
           }
         }
@@ -183,7 +182,15 @@ export default function BuatSOPage() {
       }
       
       alert('SO berhasil dibuat!');
-      router.push('/penjualan');
+      
+      if (!isRecurring) {
+        // Jika LUNAS, arahkan ke halaman CETAK nota profesional
+        router.push(`/penjualan/${txData.id}/cetak`);
+      } else {
+        // Jika CICILAN, arahkan ke daftar penjualan
+        router.push('/penjualan');
+      }
+      
       router.refresh();
     } catch (error: any) { 
       alert('Terjadi kesalahan: ' + error.message); 
@@ -257,8 +264,13 @@ export default function BuatSOPage() {
                         min="1" 
                         value={item.quantity} 
                         onChange={(e) => {
-                          const val = Math.max(1, parseInt(e.target.value) || 0);
-                          setCart(cart.map(i => i.id === item.id ? { ...i, quantity: val } : i));
+                          const val = e.target.value === '' ? '' : parseInt(e.target.value);
+                          setCart(cart.map(i => i.id === item.id ? { ...i, quantity: isNaN(val as number) ? '' : val } : i));
+                        }}
+                        onBlur={() => {
+                          if (!item.quantity || Number(item.quantity) <= 0) {
+                            setCart(cart.filter(i => i.id !== item.id));
+                          }
                         }}
                         className="w-12 text-center text-sm font-black text-black bg-transparent focus:outline-none" 
                       />
@@ -284,12 +296,12 @@ export default function BuatSOPage() {
               {isRecurring && (
                 <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="bg-white p-3 rounded-xl border-2 border-gray-200">
-                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Down Payment (Rp)</p>
-                    <input type="number" value={dpAmount || ''} onChange={e => setDpAmount(Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none placeholder:text-gray-300" placeholder="0" />
+                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Down Payment (%)</p>
+                    <input type="number" min="0" max="99" value={dpPercent} onChange={e => setDpPercent(e.target.value === '' ? '' : Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none placeholder:text-gray-300" placeholder="0" />
                   </div>
                   <div className="bg-white p-3 rounded-xl border-2 border-gray-200">
-                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tenor ({intervalUnit})</p>
-                    <input type="number" value={tenor} onChange={e => setTenor(Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none" />
+                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tenor (Bulan)</p>
+                    <input type="number" min="1" value={tenor} onChange={e => setTenor(e.target.value === '' ? '' : Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none placeholder:text-gray-300" placeholder="0" />
                   </div>
                 </div>
               )}
@@ -305,10 +317,17 @@ export default function BuatSOPage() {
                     <button type="button" onClick={() => setDiscountType(discountType === 'persen' ? 'nominal' : 'persen')} className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">{discountType === 'persen' ? '%' : 'Rp'}</button>
                   </div>
                   <input 
-                    type="number" 
+                    type="text" 
                     placeholder={discountType === 'persen' ? 'Diskon %' : 'Potongan Nominal'} 
-                    value={discountValue}
-                    onChange={(e) => setDiscountValue(e.target.value)}
+                    value={discountType === 'persen' ? discountValue : (discountValue ? new Intl.NumberFormat('id-ID').format(Number(discountValue)) : '')}
+                    onChange={(e) => {
+                      if (discountType === 'persen') {
+                        setDiscountValue(e.target.value);
+                      } else {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setDiscountValue(val);
+                      }
+                    }}
                     className="w-full bg-transparent font-black text-sm text-black focus:outline-none placeholder:text-gray-300" 
                   />
                 </div>

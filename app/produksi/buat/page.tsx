@@ -100,13 +100,23 @@ export default function BuatSPKPage() {
         .select();
 
       if (error) throw error;
+      const newSpkId = data[0].id;
+
+      // 2. Insert Initial Production Logs (Bahan Baku Terpilih)
+      if (cart.length > 0) {
+        const { error: logsError } = await supabase
+          .from('production_logs')
+          .insert(cart.map(item => ({
+            production_order_id: newSpkId,
+            product_id: item.product_id,
+            quantity: 0,
+            type: 'CONSUMED'
+          })));
+        if (logsError) throw logsError;
+      }
 
       alert('SPK berhasil dibuat!');
-      if (data && data[0]) {
-        router.push(`/produksi/${data[0].id}`);
-      } else {
-        router.push('/produksi');
-      }
+      router.push(`/produksi/${newSpkId}`);
       router.refresh();
       
     } catch (error: any) {
@@ -179,20 +189,13 @@ export default function BuatSPKPage() {
                 <div key={item.id} className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-sm flex justify-between items-center relative overflow-hidden group">
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500 rounded-l-xl"></div>
                   <h5 className="font-bold text-black text-sm flex-1 pl-1 pr-2 leading-tight">{item.name}</h5>
-                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 border border-gray-200 shrink-0">
-                    <button type="button" onClick={() => updateQty(item.id, -1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-md text-gray-600 hover:text-red-600 transition-colors font-black text-lg">-</button>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      value={item.quantity} 
-                      onChange={(e) => {
-                        const val = Math.max(1, parseInt(e.target.value) || 0);
-                        setCart(cart.map(i => i.id === item.id ? { ...i, quantity: val } : i));
-                      }}
-                      className="w-10 text-center text-sm font-black text-black bg-transparent focus:outline-none" 
-                    />
-                    <button type="button" onClick={() => updateQty(item.id, 1)} className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded-md text-gray-600 hover:text-orange-600 transition-colors font-black text-lg">+</button>
-                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setCart(cart.filter(i => i.id !== item.id))}
+                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 </div>
               ))
             )}

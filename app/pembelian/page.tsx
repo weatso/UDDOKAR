@@ -25,7 +25,13 @@ export default function PembelianPage() {
 
     const { data, count } = await supabase
       .from('transactions')
-      .select('id, created_at, total_amount, amount_paid, status, contact:contacts(name)', { count: 'exact' })
+      .select(`
+        id, created_at, total_amount, amount_paid, status, 
+        contact:contacts(name),
+        items:transaction_items(
+          id, quantity, qty_received, product:products(name)
+        )
+      `, { count: 'exact' })
       .eq('type', 'PO_INBOUND')
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -58,6 +64,7 @@ export default function PembelianPage() {
             <tr>
               <th className="px-6 py-4 text-black font-bold">Tanggal PO</th>
               <th className="px-6 py-4 text-black font-bold">Nama Supplier</th>
+              <th className="px-6 py-4 text-black font-bold">Barang Dipesan</th>
               <th className="px-6 py-4 text-black font-bold text-right">Total Tagihan</th>
               <th className="px-6 py-4 text-black font-bold text-center">Status Pembayaran</th>
               <th className="px-6 py-4 text-black font-bold text-center">Aksi</th>
@@ -68,11 +75,25 @@ export default function PembelianPage() {
              transactions.length === 0 ? <tr><td colSpan={5} className="text-center py-8 text-black font-bold">Belum ada transaksi.</td></tr> : 
              transactions.map(tx => (
               <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 text-black font-bold">{formatDate(tx.created_at)}</td>
-                <td className="px-6 py-4 text-black font-semibold">{tx.contact?.name || '-'}</td>
-                <td className="px-6 py-4 text-black font-bold text-right text-lg">{formatRupiah(tx.total_amount)}</td>
-                <td className="px-6 py-4 text-center"><StatusBadge status={tx.status} /></td>
-                <td className="px-6 py-4 flex justify-center">
+                <td className="px-6 py-4 text-black font-bold align-top">{formatDate(tx.created_at)}</td>
+                <td className="px-6 py-4 text-black font-semibold align-top">{tx.contact?.name || '-'}</td>
+                <td className="px-6 py-4 align-top">
+                  <div className="flex flex-col gap-1">
+                    {tx.items?.map((item: any) => {
+                      const received = item.qty_received || 0;
+                      const ordered = item.quantity;
+                      const colorClass = received === 0 ? 'text-red-600' : (received < ordered ? 'text-orange-500' : 'text-green-600');
+                      return (
+                        <span key={item.id} className="text-sm font-bold text-gray-700">
+                          • {item.product?.name} <span className={`${colorClass} font-black`}>({received} / {ordered})</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-black font-bold text-right text-lg align-top">{formatRupiah(tx.total_amount)}</td>
+                <td className="px-6 py-4 text-center align-top"><StatusBadge status={tx.status} /></td>
+                <td className="px-6 py-4 flex justify-center align-top">
                   <Link href={`/pembelian/${tx.id}`} className="text-white bg-gray-800 hover:bg-black px-4 py-2 rounded-lg font-bold border-2 border-black">Detail</Link>
                 </td>
               </tr>
@@ -119,6 +140,23 @@ export default function PembelianPage() {
                       <div>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Tagihan</p>
                         <p className="text-lg font-black text-purple-700 leading-none mt-1">{formatRupiah(tx.total_amount)}</p>
+                      </div>
+                    </div>
+                    {/* Barang Dipesan */}
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Barang Dipesan:</p>
+                      <div className="flex flex-col gap-1">
+                        {tx.items?.map((item: any) => {
+                          const received = item.qty_received || 0;
+                          const ordered = item.quantity;
+                          const colorClass = received === 0 ? 'text-red-600' : (received < ordered ? 'text-orange-500' : 'text-green-600');
+                          return (
+                            <span key={item.id} className="text-xs font-bold text-gray-700 flex justify-between gap-4">
+                              <span className="truncate flex-1">• {item.product?.name}</span>
+                              <span className={`${colorClass} font-black shrink-0 uppercase text-[10px]`}>({received}/{ordered})</span>
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

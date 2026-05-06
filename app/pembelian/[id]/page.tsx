@@ -45,9 +45,19 @@ export default function DetailPOPage() {
 
   const handleTerimaBarang = async () => {
     try {
-      // 1. Update qty_received untuk setiap item
+      // 1. Validasi: Pastikan tidak ada yang melebihi sisa
       for (const item of items) {
-        const additional = receivingQty[item.id] || 0;
+        const additional = Number(receivingQty[item.id] || 0);
+        const sisa = item.quantity - (item.qty_received || 0);
+        
+        if (additional > sisa) {
+          return alert(`Gagal: Jumlah terima untuk "${item.product?.name}" (${additional}) melebihi sisa yang dipesan (${sisa})!`);
+        }
+      }
+
+      // 2. Update qty_received untuk setiap item
+      for (const item of items) {
+        const additional = Number(receivingQty[item.id] || 0);
         if (additional > 0) {
           const newQty = Number(item.qty_received || 0) + additional;
           const { error: itemErr } = await supabase
@@ -162,11 +172,16 @@ export default function DetailPOPage() {
                     {!transaction.is_void && (
                       <td className="px-6 py-5 text-right">
                         <input 
-                          type="number" min="0" max={sisa} 
+                          type="number" 
+                          min="0" 
+                          max={sisa} 
                           placeholder="0"
-                          value={receivingQty[item.id] || ''}
-                          onChange={(e) => setReceivingQty({...receivingQty, [item.id]: Number(e.target.value)})}
-                          className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg text-right font-black focus:border-purple-600 focus:outline-none transition-all"
+                          value={receivingQty[item.id] === 0 ? 0 : (receivingQty[item.id] || '')}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? '' : Number(e.target.value);
+                            setReceivingQty({...receivingQty, [item.id]: val as number});
+                          }}
+                          className={`w-24 px-3 py-2 border-2 rounded-lg text-right font-black focus:outline-none transition-all ${Number(receivingQty[item.id] || 0) > sisa ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-300 focus:border-purple-600'}`}
                         />
                       </td>
                     )}

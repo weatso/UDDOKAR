@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { ArrowLeft, Receipt, Printer, Ban } from 'lucide-react';
+import { ArrowLeft, Receipt, Printer, Ban, CalendarDays } from 'lucide-react';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useRole } from '@/lib/hooks/useRole';
 
@@ -16,6 +16,7 @@ export default function DetailSOPage() {
 
   const [transaction, setTransaction] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -38,8 +39,16 @@ export default function DetailSOPage() {
         .eq('transaction_id', txId);
       if (itemsError) throw itemsError;
 
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('payment_schedules')
+        .select('*')
+        .eq('transaction_id', txId)
+        .order('due_date', { ascending: true });
+      if (scheduleError) throw scheduleError;
+
       if (txData) setTransaction(txData);
       if (itemsData) setItems(itemsData);
+      if (scheduleData) setSchedules(scheduleData);
     } catch (error: any) {
       alert('Gagal mengambil data detail SO: ' + error.message);
     } finally {
@@ -222,6 +231,63 @@ export default function DetailSOPage() {
           </table>
         </div>
       </div>
+
+      {/* Rincian Cicilan (Hanya tampil jika ada jadwal cicilan) */}
+      {!transaction.is_void && schedules.length > 0 && (
+        <div className="bg-white rounded-2xl border-2 border-purple-300 shadow-sm overflow-hidden mb-8">
+          <div className="p-6 border-b-2 border-purple-200 bg-purple-50 flex items-center gap-3">
+            <CalendarDays className="w-6 h-6 text-purple-700" />
+            <h2 className="text-xl font-bold text-purple-900">Rincian & Jadwal Cicilan</h2>
+          </div>
+          <div className="p-6">
+            <div className="flex flex-col md:flex-row justify-between gap-4 bg-gray-50 p-5 rounded-xl border-2 border-gray-200 mb-6">
+              <div>
+                <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Telah Dibayar (DP)</p>
+                <p className="text-3xl font-black text-green-700 leading-none">{formatRupiah(transaction.amount_paid)}</p>
+              </div>
+              <div className="md:text-right">
+                <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Sisa Piutang</p>
+                <p className="text-3xl font-black text-red-600 leading-none">{formatRupiah(transaction.total_amount - transaction.amount_paid)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {schedules.map((sch, idx) => {
+                // Determine if it's the DP schedule (created on the same day as tx and equals amount_paid)
+                const isDp = idx === 0 && transaction.amount_paid > 0 && sch.amount_to_pay === transaction.amount_paid;
+                const title = isDp ? "Down Payment (DP)" : `Cicilan ${isDp ? idx : idx + 1}`;
+                const isPaid = sch.status === 'PAID' || isDp; // Treat DP as paid since it's in amount_paid
+
+                return (
+                  <div key={sch.id} className={`flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-xl border-2 transition-all ${isPaid ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200 hover:border-purple-300'}`}>
+                    <div className="flex items-center gap-4 mb-3 sm:mb-0">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-xl shrink-0 ${isPaid ? 'bg-green-200 text-green-800' : 'bg-purple-100 text-purple-700'}`}>
+                        {isDp ? 'DP' : (isDp ? idx : idx + 1)}
+                      </div>
+                      <div>
+                        <p className="font-black text-black text-lg">{title}</p>
+                        <p className="text-sm font-bold text-gray-500 flex items-center gap-1 mt-1">
+                          <CalendarDays className="w-4 h-4" /> Jatuh Tempo: {formatDate(sch.due_date)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="sm:text-right flex sm:flex-col justify-between items-center sm:items-end w-full sm:w-auto">
+                      <p className="text-xl font-black text-black">{formatRupiah(sch.amount_to_pay)}</p>
+                      <div className="mt-2">
+                        {isPaid ? (
+                          <span className="px-3 py-1 bg-green-200 text-green-800 text-xs font-black rounded-lg uppercase tracking-wider">LUNAS</span>
+                        ) : (
+                          <StatusBadge status={sch.status} />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

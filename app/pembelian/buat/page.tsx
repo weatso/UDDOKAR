@@ -19,9 +19,7 @@ export default function BuatPOPage() {
   // State Tenor & DP
   const [isRecurring, setIsRecurring] = useState(false);
   const [tenor, setTenor] = useState(1);
-  const [dpAmount, setDpAmount] = useState(0);
-  const [intervalValue, setIntervalValue] = useState(1);
-  const [intervalUnit, setIntervalUnit] = useState<'Bulan' | 'Hari'>('Bulan');
+  const [dpPercent, setDpPercent] = useState<number>(0);
 
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,9 +85,11 @@ export default function BuatPOPage() {
     const validItems = cart.filter(i => i.product_id && i.quantity > 0 && i.price >= 0);
     if (validItems.length === 0) return alert('Isi minimal 1 barang!');
 
+    const calculatedDpAmount = Math.floor(totalTagihan * (dpPercent / 100));
+
     // [FIX A] Validasi DP tidak boleh >= Total Tagihan
-    if (isRecurring && dpAmount > 0 && dpAmount >= totalTagihan) {
-      return alert('Uang Muka (DP) tidak boleh sama atau lebih besar dari Total Tagihan!');
+    if (isRecurring && calculatedDpAmount >= totalTagihan && totalTagihan > 0) {
+      return alert('DP tidak boleh 100% atau lebih dari Total Tagihan!');
     }
 
     setIsLoading(true);
@@ -98,9 +98,9 @@ export default function BuatPOPage() {
       const { data: txData, error: txError } = await supabase.from('transactions').insert([{ 
         contact_id: formData.contact_id, 
         type: 'PO_INBOUND', 
-        status: 'UNPAID', 
+        status: isRecurring ? 'UNPAID' : 'PAID', 
         total_amount: totalTagihan, 
-        amount_paid: 0, 
+        amount_paid: isRecurring ? 0 : totalTagihan, 
         created_at: formData.created_at 
       }]).select().single();
       
@@ -114,14 +114,14 @@ export default function BuatPOPage() {
 
       // 3. Logika Penjadwalan
       if (isRecurring) {
-        const remainingBalance = totalTagihan - (dpAmount || 0);
+        const remainingBalance = totalTagihan - calculatedDpAmount;
         const schedules = [];
 
         // JADWAL DP (Bulan 0)
-        if (dpAmount > 0) {
+        if (calculatedDpAmount > 0) {
           schedules.push({
             transaction_id: txData.id,
-            amount_to_pay: Math.floor(dpAmount),
+            amount_to_pay: calculatedDpAmount,
             due_date: formData.created_at,
             status: 'UNPAID'
           });
@@ -135,20 +135,13 @@ export default function BuatPOPage() {
 
           for (let i = 0; i < tenor; i++) {
             let dueStr = '';
-
-            if (intervalUnit === 'Bulan') {
-              const totalMonthsToAdd = intervalValue * (i + 1);
-              const targetDate = new Date(year, month - 1 + totalMonthsToAdd, day);
-              const expectedMonth = ((month - 1 + totalMonthsToAdd) % 12 + 12) % 12;
-              if (targetDate.getMonth() !== expectedMonth) {
-                targetDate.setDate(0);
-              }
-              dueStr = targetDate.toISOString().split('T')[0];
-            } else {
-              const d = new Date(year, month - 1, day);
-              d.setDate(d.getDate() + (intervalValue * (i + 1)));
-              dueStr = d.toISOString().split('T')[0];
+            const totalMonthsToAdd = i + 1;
+            const targetDate = new Date(year, month - 1 + totalMonthsToAdd, day);
+            const expectedMonth = ((month - 1 + totalMonthsToAdd) % 12 + 12) % 12;
+            if (targetDate.getMonth() !== expectedMonth) {
+              targetDate.setDate(0);
             }
+            dueStr = targetDate.toISOString().split('T')[0];
 
             const amount = i === tenor - 1 ? baseInstallment + roundingRemainder : baseInstallment;
             schedules.push({ transaction_id: txData.id, amount_to_pay: amount, due_date: dueStr, status: 'UNPAID' });
@@ -229,8 +222,13 @@ export default function BuatPOPage() {
                         min="1" 
                         value={item.quantity} 
                         onChange={(e) => {
-                          const val = Math.max(1, parseInt(e.target.value) || 0);
-                          setCart(cart.map(i => i.id === item.id ? { ...i, quantity: val } : i));
+                          const val = e.target.value === '' ? '' : parseInt(e.target.value);
+                          setCart(cart.map(i => i.id === item.id ? { ...i, quantity: isNaN(val as number) ? '' : val } : i));
+                        }}
+                        onBlur={() => {
+                          if (!item.quantity || Number(item.quantity) <= 0) {
+                            setCart(cart.filter(i => i.id !== item.id));
+                          }
                         }}
                         className="w-12 text-center text-sm font-black text-black bg-transparent focus:outline-none" 
                       />
@@ -239,10 +237,13 @@ export default function BuatPOPage() {
                     
                     <div className="flex-1">
                       <input 
-                        type="number" 
+                        type="text" 
                         placeholder="Harga Beli"
-                        value={item.price || ''}
-                        onChange={(e) => setCart(cart.map(i => i.id === item.id ? { ...i, price: e.target.value } : i))}
+                        value={item.price ? new Intl.NumberFormat('id-ID').format(Number(item.price)) : ''}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, '');
+                          setCart(cart.map(i => i.id === item.id ? { ...i, price: val } : i));
+                        }}
                         className="w-full text-right text-sm font-black text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2 focus:outline-none focus:border-blue-500" 
                       />
                     </div>
@@ -265,18 +266,12 @@ export default function BuatPOPage() {
               {isRecurring && (
                 <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="bg-white p-3 rounded-xl border-2 border-gray-200">
-                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Down Payment (Rp)</p>
-                    <input type="number" value={dpAmount || ''} onChange={e => setDpAmount(Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none placeholder:text-gray-300" placeholder="0" />
+                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Down Payment (%)</p>
+                    <input type="number" min="0" max="99" value={dpPercent || ''} onChange={e => setDpPercent(Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none placeholder:text-gray-300" placeholder="0" />
                   </div>
                   <div className="bg-white p-3 rounded-xl border-2 border-gray-200">
-                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tenor</p>
-                    <div className="flex gap-2">
-                       <input type="number" value={intervalValue} onChange={e => setIntervalValue(Number(e.target.value))} className="w-1/2 bg-gray-50 px-2 py-1 rounded font-black text-sm text-black focus:outline-none" />
-                       <select value={intervalUnit} onChange={e => setIntervalUnit(e.target.value as 'Bulan' | 'Hari')} className="w-1/2 bg-transparent text-xs font-bold focus:outline-none">
-                         <option value="Bulan">Bulan</option>
-                         <option value="Hari">Hari</option>
-                       </select>
-                    </div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Tenor (Bulan)</p>
+                    <input type="number" min="1" value={tenor} onChange={e => setTenor(Number(e.target.value))} className="w-full bg-transparent font-black text-sm text-black focus:outline-none" />
                   </div>
                 </div>
               )}
