@@ -225,12 +225,13 @@ export default function PembelianUtamaPage() {
               <thead className="bg-gray-100 border-b-2 border-gray-200">
                 <tr>
                   <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[5%] text-center">No</th>
-                  <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[25%]">Deskripsi Barang</th>
+                  <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[20%]">Deskripsi Barang</th>
                   <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[10%] text-center">QTY</th>
                   <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[15%] text-center">Tonase</th>
                   <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[15%] text-right">Harga /kg</th>
                   <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[15%] text-right">Harga Satuan</th>
                   <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[15%] text-right">Jumlah</th>
+                  <th className="py-3 px-4 text-[10px] font-black text-gray-500 uppercase w-[5%] text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -270,6 +271,11 @@ export default function PembelianUtamaPage() {
                     <td className="py-3 px-4 align-top"><input type="text" value={formatNum(line.harga_perkilo)} onChange={e => updateLine(line.uid, { harga_perkilo: e.target.value.replace(/[^0-9]/g, '') })} className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg text-black font-bold focus:border-blue-600 outline-none text-sm text-right" placeholder="0" /></td>
                     <td className="py-3 px-4 align-top"><input type="text" value={formatNum(line.harga_satuan)} onChange={e => updateLine(line.uid, { harga_satuan: e.target.value.replace(/[^0-9]/g, '') })} className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg text-black font-bold focus:border-blue-600 outline-none text-sm text-right" placeholder="0" /></td>
                     <td className="py-3 px-4 align-top text-right"><span className="font-black text-black text-sm">{formatRp(lineTotal(line))}</span></td>
+                    <td className="py-3 px-4 text-center align-top">
+                      <button type="button" onClick={() => removeLine(line.uid)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -342,9 +348,6 @@ export default function PembelianUtamaPage() {
               className="text-blue-700 font-bold hover:bg-blue-50 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-blue-200 transition-all text-sm bg-white">
               <Plus className="w-4 h-4" /> Tambah Baris
             </button>
-            <div className="flex items-center gap-4 pr-4">
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Baris: {lines.length}</span>
-            </div>
           </div>
         </div>
 
