@@ -1,193 +1,319 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Printer, FileText, Truck } from 'lucide-react';
 
-export default function CetakNotaSO() {
+// ─── Terbilang Helper ───────────────────────────────────────────────────────
+function terbilang(n: number): string {
+  if (n === 0) return 'Nol Rupiah';
+  const s = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
+  const c = (x: number): string => {
+    if (x < 12) return s[x];
+    if (x < 20) return s[x - 10] + ' Belas';
+    if (x < 100) return s[Math.floor(x / 10)] + ' Puluh' + (x % 10 ? ' ' + s[x % 10] : '');
+    if (x < 200) return 'Seratus' + (x - 100 ? ' ' + c(x - 100) : '');
+    if (x < 1000) return s[Math.floor(x / 100)] + ' Ratus' + (x % 100 ? ' ' + c(x % 100) : '');
+    if (x < 2000) return 'Seribu' + (x - 1000 ? ' ' + c(x - 1000) : '');
+    if (x < 1_000_000) return c(Math.floor(x / 1000)) + ' Ribu' + (x % 1000 ? ' ' + c(x % 1000) : '');
+    if (x < 1_000_000_000) return c(Math.floor(x / 1_000_000)) + ' Juta' + (x % 1_000_000 ? ' ' + c(x % 1_000_000) : '');
+    return c(Math.floor(x / 1_000_000_000)) + ' Miliar' + (x % 1_000_000_000 ? ' ' + c(x % 1_000_000_000) : '');
+  };
+  return c(Math.round(n)) + ' Rupiah';
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+export default function CetakSOPage() {
   const params = useParams();
   const txId = params.id as string;
-  const [data, setData] = useState<any>(null);
+  const [transaction, setTransaction] = useState<any>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [view, setView] = useState<'invoice' | 'sj'>('invoice');
+
 
   useEffect(() => {
-    if (txId) {
-      supabase.from('transactions')
-        .select('*, contact:contacts(*), items:transaction_items(*, product:products(*))')
-        .eq('id', txId).single()
-        .then(({ data }) => setData(data));
-    }
+    if (txId) fetchDetail();
   }, [txId]);
 
-  useEffect(() => {
-    if (data) {
-      setTimeout(() => window.print(), 500);
-    }
-  }, [data]);
+  const fetchDetail = async () => {
+    setIsLoading(true);
+    const { data: txData } = await supabase
+      .from('transactions')
+      .select('*, contact:contacts(*)')
+      .eq('id', txId)
+      .single();
+    const { data: itemsData } = await supabase
+      .from('transaction_items')
+      .select('*, product:products(*)')
+      .eq('transaction_id', txId);
+    if (txData) setTransaction(txData);
+    if (itemsData) setItems(itemsData);
+    setIsLoading(false);
+  };
 
-  if (!data) return <div className="p-8 font-black text-black">Menyiapkan Nota Penjualan...</div>;
+  if (isLoading || !transaction) return (
+    <div className="min-h-screen flex items-center justify-center bg-white font-mono">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="font-bold text-gray-500">Memuat Dokumen...</p>
+      </div>
+    </div>
+  );
 
-  const formatDate = (d: string) => new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(d));
-  const formatRupiah = (n: number) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
-  const discountMeta = (() => { try { return data.notes ? JSON.parse(data.notes) : null; } catch { return null; } })();
-  const subtotalBeforeDiscount = discountMeta?.subtotal_before_discount ?? data.total_amount;
+  const rp = (n: number) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
+  const tgl = (d: string) => new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(d));
+
+  let notes: any = { keterangan: '', subtotal_before_discount: 0, discount_amount: 0, discount_value: 0, discount_type: 'persen', item_meta: [] };
+  try { notes = { ...notes, ...JSON.parse(transaction.notes || '{}') }; } catch (_) {}
+
+  const ivNo = `IV${transaction.id.split('-')[0].toUpperCase()}`;
+  const sjNo = `SJ${transaction.id.split('-')[0].toUpperCase()}`;
+  const EMPTY_ROWS_INVOICE = Math.max(0, 7 - items.length);
+  const EMPTY_ROWS_SJ = Math.max(0, 6 - items.length);
 
   return (
-    <div className="bg-gray-100 min-h-screen py-8 print:py-0 print:bg-transparent print:min-h-0 print:p-0 font-mono text-black">
-      <style jsx global>{`
+    <div className="bg-gray-100 min-h-screen print:min-h-0 print:bg-white font-serif text-black">
+      {/* ── Force Landscape + Fit-to-One-Page ── */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          @page { 
-            size: landscape; 
-            margin: 5mm 10mm; 
+          @page {
+            size: landscape;
+            margin: 3mm 8mm;
           }
-          body { 
-            background: none;
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .print-doc {
+            font-size: 10px !important;
+          }
+          .print-doc table {
+            font-size: 9px !important;
+          }
+          .print-doc .sig-box {
+            min-height: 22mm !important;
           }
         }
-      `}</style>
+      `}} />
 
-      {/* Header Navigasi (Hidden on Print) */}
-      <div className="flex justify-between p-4 mb-4 bg-white border-2 border-gray-300 print:hidden max-w-[210mm] mx-auto rounded-xl shadow-sm">
-        <Link href={`/penjualan/${txId}`} className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-all flex items-center gap-2">
-          <ArrowLeft size={18} /> Kembali ke Detail
-        </Link>
-        <button onClick={() => window.print()} className="bg-black hover:bg-gray-800 text-white px-8 py-2 rounded-lg font-bold shadow-md transition-all flex items-center gap-2 border-2 border-black">
-          <Printer size={18} /> Cetak Nota
-        </button>
+      {/* ── Control Panel (hidden on print) ─────────────────────────────────── */}
+      <div className="print:hidden p-4 md:p-6">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center bg-white p-5 rounded-2xl shadow-xl border-2 border-purple-100 gap-4">
+          <div className="flex items-center gap-6">
+            <Link href="/penjualan" className="flex items-center gap-2 text-gray-400 hover:text-black font-black uppercase text-xs tracking-widest transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Kembali
+            </Link>
+            <div className="h-8 w-px bg-gray-200" />
+            <div className="flex bg-gray-100 p-1 rounded-xl border border-gray-200">
+              <button onClick={() => setView('invoice')}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-black text-xs uppercase transition-all ${view === 'invoice' ? 'bg-white text-purple-700 shadow-md' : 'text-gray-500 hover:text-black'}`}>
+                <FileText className="w-4 h-4" /> Invoice
+              </button>
+              <button onClick={() => setView('sj')}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-black text-xs uppercase transition-all ${view === 'sj' ? 'bg-white text-purple-700 shadow-md' : 'text-gray-500 hover:text-black'}`}>
+                <Truck className="w-4 h-4" /> Surat Jalan
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={() => window.print()}
+            className="bg-purple-700 hover:bg-purple-800 text-white px-8 py-3 rounded-xl font-black flex items-center gap-3 shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest border-b-4 border-purple-900">
+            <Printer className="w-5 h-5" /> Cetak Dokumen
+          </button>
+        </div>
       </div>
 
-      {/* Container Utama (Landscape) */}
-      <div className="w-full max-w-[297mm] mx-auto border-2 border-black p-6 bg-white shadow-2xl relative print:border-none print:shadow-none print:max-w-none print:p-0">
-        
-        {/* Header Section: Horizontal Layout */}
-        <div className="grid grid-cols-2 gap-8 border-b-2 border-black pb-2 mb-3">
-          {/* Sisi Kiri: Perusahaan & Pelanggan */}
-          <div className="flex gap-6">
-            <div className="shrink-0">
-              <h1 className="text-3xl font-black tracking-tighter leading-none">UD DOKAR</h1>
-              <p className="text-[9px] font-black uppercase mt-0.5 tracking-widest">KARDUS & CUSTOM</p>
-              <p className="text-[9px] font-bold">WA: 0812-XXXX-XXXX</p>
-            </div>
-            <div className="border-l-2 border-black pl-4">
-              <p className="text-[8px] uppercase font-black text-gray-500">Pelanggan:</p>
-              <p className="font-black text-base leading-none uppercase">{data.contact?.name}</p>
-              <p className="text-[10px] font-bold leading-tight mt-1 max-w-[250px]">{data.contact?.address || 'Alamat tidak tersedia'}</p>
-            </div>
-          </div>
+      {/* ── Preview Container ── */}
+      <div className="px-4 pb-8 print:p-0 print:m-0 flex justify-center font-['Times_New_Roman',_Times,_serif] text-black">
+        <div className="w-full max-w-5xl print:max-w-none print:w-full print:min-h-0 text-black">
 
-          {/* Sisi Kanan: Info Faktur */}
-          <div className="flex justify-end items-end gap-4 pb-1">
-            <div className="text-right border-r-2 border-black pr-4">
-              <p className="text-[8px] uppercase font-black text-gray-500">No. Faktur</p>
-              <p className="font-black text-sm">#{data.id.slice(0,8).toUpperCase()}</p>
-            </div>
-            <div className="text-right border-r-2 border-black pr-4">
-              <p className="text-[8px] uppercase font-black text-gray-500">Tgl Faktur</p>
-              <p className="font-black text-sm">{formatDate(data.created_at)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[8px] uppercase font-black text-gray-500">Status</p>
-              <p className="font-black text-sm uppercase">{data.status}</p>
-            </div>
-          </div>
-        </div>
+          {/* ════════════════════════════════════════════════════════════════════
+              NOTA INVOICE
+          ════════════════════════════════════════════════════════════════════ */}
+          {view === 'invoice' && (
+            <div className="print-doc bg-white print:bg-white shadow-2xl print:shadow-none border border-gray-300 print:border-0 p-8 print:p-0 print:m-0">
 
-        <h2 className="text-center text-xl font-black uppercase tracking-widest mb-3 leading-none">Nota Penjualan</h2>
-
-        {/* Tabel Barang: Compact Padding */}
-        <table className="w-full border-collapse border-2 border-black mb-4">
-          <thead>
-            <tr className="bg-black text-white">
-              <th className="border border-black px-2 py-1 w-16 text-center font-black text-[10px] uppercase tracking-tighter">Qty</th>
-              <th className="border border-black px-3 py-1 text-left font-black text-[10px] uppercase tracking-tighter">Nama Barang / Spesifikasi</th>
-              <th className="border border-black px-3 py-1 text-right font-black text-[10px] uppercase tracking-tighter">Harga Satuan</th>
-              <th className="border border-black px-3 py-1 text-right font-black text-[10px] uppercase tracking-tighter">Jumlah (Rp)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items?.map((item: any, idx: number) => (
-              <tr key={idx} className="h-8">
-                <td className="border border-black px-2 py-1 text-center font-bold text-base">{item.quantity}</td>
-                <td className="border border-black px-3 py-1 font-bold text-base">
-                  {item.product?.name} 
-                  <span className="text-[10px] ml-4 font-normal text-gray-600">Dimensi: {item.product?.dimensions?.p}x{item.product?.dimensions?.l} cm</span>
-                </td>
-                <td className="border border-black px-3 py-1 text-right font-bold text-base">{formatRupiah(item.price)}</td>
-                <td className="border border-black px-3 py-1 text-right font-black text-lg">{formatRupiah(item.quantity * item.price)}</td>
-              </tr>
-            ))}
-            {/* Filler rows untuk menjaga layout tetap konsisten */}
-            {[...Array(Math.max(0, 4 - (data.items?.length || 0)))].map((_, i) => (
-              <tr key={i} className="h-8">
-                <td className="border border-black"></td>
-                <td className="border border-black"></td>
-                <td className="border border-black"></td>
-                <td className="border border-black"></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Footer Section: Horizontal Layout */}
-        <div className="flex justify-between items-start gap-8">
-          {/* Kiri: Tanda Tangan & Keterangan */}
-          <div className="flex gap-8 flex-1">
-            <div className="space-y-2 max-w-[300px]">
-              <p className="text-[9px] font-black border-b border-black pb-0.5 inline-block uppercase">Keterangan:</p>
-              <p className="text-[8px] italic leading-tight text-gray-700">
-                - Barang sudah dibeli tidak dapat ditukar/dikembalikan.<br />
-                - Pembayaran sah jika ada tanda tangan & stempel.<br />
-                - Cek kondisi barang saat diterima.
-              </p>
-            </div>
-            
-            <div className="flex gap-8 text-center pt-2">
-              <div className="w-24">
-                <p className="text-[8px] font-black uppercase mb-10">Penerima,</p>
-                <div className="border-b border-black"></div>
+              {/* Kop Surat */}
+              <div className="text-center mb-4 print:mb-1 pb-3 print:pb-1 border-b-4 border-double border-black text-black">
+                <h1 className="text-3xl font-bold uppercase tracking-widest text-black">UD DOKAR</h1>
+                <p className="text-sm font-bold">Pabrik Produksi Kardus &amp; Box Custom</p>
               </div>
-              <div className="w-24">
-                <p className="text-[8px] font-black uppercase mb-10">Hormat Kami,</p>
-                <div className="border-b border-black"></div>
-                <p className="text-[7px] font-bold mt-0.5">UD DOKAR</p>
-              </div>
-            </div>
-          </div>
 
-          {/* Kanan: Ringkasan Biaya (Compact & Rata Kanan) */}
-          <div className="w-64 shrink-0 border-2 border-black p-2 bg-gray-50">
-            {discountMeta ? (
-              <div className="space-y-0.5 border-b border-gray-300 pb-1 mb-1">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase">Subtotal</span>
-                  <span className="font-bold text-sm">{formatRupiah(subtotalBeforeDiscount)}</span>
+              {/* Baris Info: Judul + Alamat Pelanggan */}
+              <div className="flex gap-6 mb-4 print:mb-2">
+                {/* Kiri: NOTA INVOICE + detail nomor */}
+                <div className="flex-1">
+                  <h2 className="text-xl font-extrabold uppercase underline mb-2 print:mb-1 tracking-wide text-black">NOTA INVOICE</h2>
+                  <div className="grid gap-x-2 gap-y-0.5 text-xs" style={{ gridTemplateColumns: '90px 8px 1fr 70px 8px 1fr' }}>
+                    <span className="font-bold"># Invoice</span><span>:</span><span className="font-bold">{ivNo}</span>
+                    <span className="font-bold"># PO</span><span>:</span><span>-</span>
+                    <span className="font-bold">Tanggal</span><span>:</span><span>{tgl(transaction.created_at)}</span>
+                    <span className="font-bold"># Surat Jalan</span><span>:</span><span>{sjNo}</span>
+                    <span className="font-bold">Jatuh Tempo</span><span>:</span><span>{transaction.status === 'PAID' ? tgl(transaction.created_at) : '-'}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center text-green-700">
-                  <span className="text-[9px] font-bold uppercase">Diskon</span>
-                  <span className="font-bold text-sm">-{formatRupiah(discountMeta.discount_amount)}</span>
+                {/* Kanan: Kotak Pelanggan */}
+                <div className="w-72 border-2 border-black p-3 self-start">
+                  <p className="text-[10px] font-bold uppercase mb-1 underline">Kepada Yth,</p>
+                  <p className="font-black text-base uppercase">{transaction.contact?.name}</p>
+                  <p className="text-[10px] font-bold uppercase whitespace-pre-wrap leading-snug">{transaction.contact?.address || '-'}</p>
+                  <p className="text-[10px] font-bold mt-1">HP: {transaction.contact?.phone || '-'}</p>
                 </div>
               </div>
-            ) : null}
-            <div className="flex justify-between items-center mb-0.5">
-              <span className="text-[9px] font-black uppercase">Total Akhir</span>
-              <span className="font-black text-base">{formatRupiah(data.total_amount)}</span>
-            </div>
-            <div className="flex justify-between items-center text-red-600 mb-1 border-b border-black pb-0.5">
-              <span className="text-[9px] font-bold uppercase tracking-tighter">Sudah Dibayar</span>
-              <span className="font-bold text-sm">-{formatRupiah(data.amount_paid)}</span>
-            </div>
-            <div className="flex justify-between items-center pt-0.5">
-              <span className="text-[10px] font-black uppercase bg-black text-white px-1">Sisa Tagihan</span>
-              <span className="text-xl font-black">Rp {formatRupiah(data.total_amount - data.amount_paid)}</span>
-            </div>
-          </div>
-        </div>
 
-        <p className="text-center text-[8px] font-bold uppercase mt-4 italic opacity-50 tracking-widest">
-          Terima kasih atas kepercayaannya. Harap simpan nota ini sebagai bukti transaksi sah.
-        </p>
+              {/* Tabel Barang */}
+              <table className="w-full border-collapse border-2 border-black text-xs">
+                <thead>
+                  <tr className="border-b-2 border-black">
+                    <th className="border-2 border-black p-1.5 text-center font-bold w-8 uppercase">No.</th>
+                    <th className="border-2 border-black p-1.5 text-left font-bold uppercase">Deskripsi Barang</th>
+                    <th className="border-2 border-black p-1.5 text-center font-bold w-20 uppercase">Quantity</th>
+                    <th className="border-2 border-black p-1.5 text-right font-bold w-28 uppercase">Harga /kg</th>
+                    <th className="border-2 border-black p-1.5 text-right font-bold w-32 uppercase">Harga Satuan</th>
+                    <th className="border-2 border-black p-1.5 text-right font-bold w-32 uppercase">Jumlah</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <tr key={item.id} className="h-8">
+                      <td className="border-2 border-black p-1.5 text-center font-medium text-base">{idx + 1}</td>
+                      <td className="border-2 border-black p-1.5 font-normal uppercase">{item.product?.name}</td>
+                      <td className="border-2 border-black p-1.5 text-center font-semibold text-base">{item.quantity}</td>
+                      <td className="border-2 border-black p-1.5 text-right font-semibold text-base">
+                        {(() => {
+                          const m = (notes.item_meta as any[])?.find((x: any) => x.product_id === item.product_id);
+                          return m?.price_per_kg ? rp(Number(m.price_per_kg)) : '-';
+                        })()}
+                      </td>
+                      <td className="border-2 border-black p-1.5 text-right font-semibold text-base">{rp(item.price)}</td>
+                      <td className="border-2 border-black p-1.5 text-right font-semibold text-base">{rp(item.quantity * item.price)}</td>
+                    </tr>
+                  ))}
+                  {[...Array(EMPTY_ROWS_INVOICE)].map((_, i) => (
+                    <tr key={i} className="h-7 print:h-5">
+                      {[...Array(6)].map((__, j) => <td key={j} className="border-2 border-black" />)}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} className="border-2 border-black p-2 align-top">
+                      <p className="text-[9px] font-black uppercase underline mb-1">Terbilang :</p>
+                      <p className="font-bold italic">{terbilang(transaction.total_amount)}</p>
+                    </td>
+                    <td className="border-2 border-black p-2 text-right text-[10px] font-bold space-y-1">
+                      <p>Jumlah :</p>
+                      <p>Potongan ({notes.discount_value}{notes.discount_type === 'persen' ? '%' : ''}) :</p>
+                      <p className="text-base font-bold border-t border-black pt-1">Total :</p>
+                    </td>
+                    <td className="border-2 border-black p-2 text-right text-[10px] font-semibold space-y-1 text-black">
+                      <p>{rp(notes.subtotal_before_discount || transaction.total_amount)}</p>
+                      <p>{rp(notes.discount_amount || 0)}</p>
+                      <p className="text-base border-t border-black pt-1 font-bold">{rp(transaction.total_amount)}</p>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Footer */}
+              <div className="flex justify-between mt-3 print:mt-1 text-[10px] break-inside-avoid">
+                <div>
+                  <p className="font-black uppercase underline">Keterangan:</p>
+                  <p className="font-bold uppercase">{notes.keterangan || '-'}</p>
+                </div>
+                <div className="text-right italic text-[9px] space-y-0.5">
+                  <p>* Transaksi dianggap sah jika pembayaran telah dikonfirmasi atau bukti transfer diterima.</p>
+                  <p>* Barang yang sudah dibeli tidak dapat ditukar/dikembalikan.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════════
+              SURAT JALAN
+          ════════════════════════════════════════════════════════════════════ */}
+          {view === 'sj' && (
+            <div className="print-doc bg-white print:bg-white shadow-2xl print:shadow-none border border-gray-300 print:border-0 p-8 print:p-0 print:m-0">
+
+              {/* Header 3-kolom */}
+              <div className="flex justify-between items-start mb-5 print:mb-2 pb-4 print:pb-2 border-b-2 border-black">
+                {/* Kiri: metadata */}
+                <div className="text-[10px] font-bold space-y-0.5 w-48">
+                  <div className="grid gap-x-1" style={{ gridTemplateColumns: '55px 8px 1fr' }}>
+                    <span>No Nota</span><span>:</span><span>{ivNo}</span>
+                    <span>No PO</span><span>:</span><span>-</span>
+                    <span>Tanggal</span><span>:</span><span>{tgl(transaction.created_at)}</span>
+                  </div>
+                </div>
+                {/* Tengah: Judul */}
+                <div className="text-center">
+                  <h1 className="text-3xl font-extrabold uppercase italic underline tracking-wide text-black">SURAT JALAN</h1>
+                  <p className="text-xl font-bold bg-black text-white px-8 py-1 inline-block mt-1 tracking-widest">#{sjNo}</p>
+                  <h2 className="text-2xl font-bold uppercase tracking-widest mt-1 text-black">UD DOKAR</h2>
+                </div>
+                {/* Kanan: Alamat kirim */}
+                <div className="w-64 border-2 border-black p-2">
+                  <p className="text-[10px] font-black uppercase border-b border-black mb-1 pb-0.5 italic">Alamat Kirim :</p>
+                  <p className="font-black text-base uppercase">{transaction.contact?.name}</p>
+                  <p className="text-[10px] font-bold uppercase whitespace-pre-wrap">{transaction.contact?.address || '-'}</p>
+                </div>
+              </div>
+
+              {/* Tabel */}
+              <table className="w-full border-collapse border-2 border-black text-sm mb-4 print:mb-2">
+                <thead>
+                  <tr className="bg-gray-50 border-b-2 border-black">
+                    <th className="border-2 border-black p-2 text-center font-bold w-10 uppercase">No.</th>
+                    <th className="border-2 border-black p-2 text-center font-bold w-28 uppercase">Quantity</th>
+                    <th className="border-2 border-black p-2 text-left font-bold uppercase">Deskripsi Barang</th>
+                    <th className="border-2 border-black p-2 text-right font-bold w-40 uppercase">Tonase (kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <tr key={item.id} className="h-10">
+                      <td className="border-2 border-black p-2 text-center font-medium text-base">{idx + 1}</td>
+                      <td className="border-2 border-black p-2 text-center text-base font-semibold">{item.quantity}</td>
+                      <td className="border-2 border-black p-2 font-normal uppercase tracking-tight">{item.product?.name}</td>
+                      <td className="border-2 border-black p-2 text-right italic font-semibold text-base">-</td>
+                    </tr>
+                  ))}
+                  {[...Array(EMPTY_ROWS_SJ)].map((_, i) => (
+                    <tr key={i} className="h-10 print:h-6">
+                      {[...Array(4)].map((__, j) => <td key={j} className="border-2 border-black" />)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Perhatian */}
+              <div className="mb-4 print:mb-2 text-[10px] font-bold italic border-l-4 border-black pl-3 py-1 bg-gray-50 break-inside-avoid">
+                <span className="font-black not-italic uppercase">PERHATIAN: </span>
+                Barang ini telah diterima dengan baik dan benar dalam kondisi segel utuh.
+              </div>
+
+              {/* Tanda Tangan */}
+              <div className="grid grid-cols-4 border-2 border-black break-inside-avoid">
+                {['Dicetak oleh,', 'Dicek oleh,', 'Dikirim oleh,', 'Diterima oleh,'].map((label, i) => (
+                  <div key={i} className={`sig-box p-4 print:p-2 text-center min-h-[38mm] print:min-h-[22mm] flex flex-col justify-between ${i < 3 ? 'border-r-2 border-black' : 'bg-gray-50'}`}>
+                    <p className="text-[10px] font-black uppercase underline">{label}</p>
+                    <p className={`text-xs font-black border-t-2 border-black pt-1 uppercase ${i === 3 ? 'italic text-[9px]' : ''}`}>
+                      {i === 0 ? 'Admin UD Dokar' : i === 1 ? 'Kepala Gudang' : i === 2 ? 'Sopir / Expedisi' : '(Stempel & Tanda Tangan)'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+            </div>
+          )}
+        </div>
       </div>
+
+
+
     </div>
   );
 }

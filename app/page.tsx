@@ -24,8 +24,7 @@ export default function Home() {
     overdue: 0, 
     hutang: 0, 
     netProfit: 0, 
-    overdueSchedules: [] as any[],
-    unreceivedItems: [] as any[]
+    overdueSchedules: [] as any[]
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [timeframe, setTimeframe] = useState<'mtd' | '7d' | '30d' | '1y'>('mtd');
@@ -40,18 +39,13 @@ export default function Home() {
         const today = new Date();
         const todayStr = today.toISOString().split('T')[0];
 
-        const [rawRes, finishedRes, spkRes, piutangRes, hutangRes, schedulesRes, unreceivedRes] = await Promise.all([
+        const [rawRes, finishedRes, spkRes, piutangRes, hutangRes, schedulesRes] = await Promise.all([
           supabase.from('products').select('stock_quantity').eq('type', 'RAW').eq('is_active', true),
           supabase.from('products').select('stock_quantity').eq('type', 'FINISHED').eq('is_active', true),
           supabase.from('production_orders').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
           supabase.from('transactions').select('total_amount, amount_paid').eq('type', 'SO_OUTBOUND').neq('status', 'PAID').eq('is_void', false),
           supabase.from('transactions').select('total_amount, amount_paid').eq('type', 'PO_INBOUND').neq('status', 'PAID').eq('is_void', false),
-          supabase.from('payment_schedules').select('id, amount_to_pay, due_date, status, transaction:transactions!inner(type, status, contact:contacts(name))').eq('status', 'UNPAID').neq('transaction.status', 'PAID').lte('due_date', todayStr).order('due_date', { ascending: true }).limit(5),
-          supabase.from('transaction_items').select(`
-            id, quantity, qty_received, 
-            product:products(name),
-            transaction:transactions!inner(id, type, is_void, contact:contacts(name))
-          `).eq('transaction.type', 'PO_INBOUND').eq('transaction.is_void', false)
+          supabase.from('payment_schedules').select('id, amount_to_pay, due_date, status, transaction:transactions!inner(type, status, contact:contacts(name))').eq('status', 'UNPAID').neq('transaction.status', 'PAID').lte('due_date', todayStr).order('due_date', { ascending: true }).limit(5)
         ]);
 
         const rawStock = rawRes.data?.reduce((acc, curr) => acc + Number(curr.stock_quantity), 0) || 0;
@@ -63,8 +57,6 @@ export default function Home() {
         const { data: hutangLunas } = await supabase.from('transactions').select('amount_paid').eq('type', 'PO_INBOUND').eq('status', 'PAID').eq('is_void', false);
         const netProfit = (piutangLunas?.reduce((acc, curr) => acc + Number(curr.amount_paid), 0) || 0) - (hutangLunas?.reduce((acc, curr) => acc + Number(curr.amount_paid), 0) || 0);
 
-        const unreceivedItems = (unreceivedRes.data || []).filter((item: any) => (item.qty_received || 0) < item.quantity);
-
         setStats({ 
           rawStock, 
           finishedStock, 
@@ -72,8 +64,7 @@ export default function Home() {
           overdue, 
           hutang, 
           netProfit, 
-          overdueSchedules: schedulesRes.data || [],
-          unreceivedItems
+          overdueSchedules: schedulesRes.data || []
         });
       } catch (err) { console.error(err); }
       finally { setIsLoading(false); }
@@ -170,46 +161,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Barang Belum Diterima */}
-      <div className="bg-white border-2 border-gray-300 rounded-xl p-4 md:p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-4 border-b-2 border-gray-200 pb-3">
-          <div className="bg-blue-100 p-2 rounded-lg text-blue-600 border border-blue-200">
-            <Package className="w-6 h-6" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-800">Barang Belum Diterima (PO)</h2>
-        </div>
-        
-        {stats.unreceivedItems.length > 0 ? (
-          <div className="grid gap-3">
-            {stats.unreceivedItems.map((item: any) => {
-              const sisa = item.quantity - (item.qty_received || 0);
-              return (
-                <div key={item.id} className="flex flex-col sm:flex-row justify-between sm:items-center bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm gap-4 hover:border-blue-400 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-1 text-xs font-bold rounded border bg-blue-100 text-blue-800 border-blue-300">
-                        {item.transaction?.contact?.name || 'Unknown Supplier'}
-                      </span>
-                      <span className="font-bold text-gray-800 truncate">{item.product?.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-600 font-semibold text-sm mt-2">
-                      Dipesan: {item.quantity} | Diterima: {item.qty_received || 0}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-                    <span className="text-lg font-black text-red-600">Kurang: {sisa}</span>
-                    <Link href={`/pembelian/${item.transaction?.id}`} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors text-sm text-center border-2 border-blue-800 shadow-sm">Terima</Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-            <p className="text-green-700 font-bold text-lg">✅ Semua pesanan pembelian telah diterima.</p>
-          </div>
-        )}
-      </div>
+
 
       {/* Pengingat Jatuh Tempo */}
       {role === 'owner' && (
